@@ -47,6 +47,7 @@ const (
 	phaseConfirming phase = iota
 	phaseMoving
 	phaseFinal
+	phaseCancelled
 )
 
 type model struct {
@@ -80,7 +81,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case phaseMoving:
 		return m.updateMoving(msg)
 	case phaseFinal:
-		return m, tea.Quit
+		return m, nil
+	case phaseCancelled:
+		return m, nil
 	default:
 		return m, nil
 	}
@@ -96,7 +99,8 @@ func (m model) updateConfirmation(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmd, m.moving.Init())
 	case confirmationCancelled:
 		m.cancelled = true
-		return m, tea.Quit
+		m.phase = phaseCancelled
+		return m, tea.Sequence(tea.Println("Cancelled"), tea.Quit)
 	default:
 		return m, cmd
 	}
@@ -112,7 +116,7 @@ func (m model) updateMoving(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Quit
 		}
 		m.phase = phaseFinal
-		return m, tea.Quit
+		return m, tea.Sequence(tea.Println(formatFinalSummary(m.summary, m.request.View.SkippedItems)), tea.Quit)
 	}
 	return m, cmd
 }
@@ -124,7 +128,9 @@ func (m model) View() tea.View {
 	case phaseMoving:
 		return m.moving.View()
 	case phaseFinal:
-		return finalSummaryView(m.summary, m.request.View.SkippedItems)
+		return tea.NewView("")
+	case phaseCancelled:
+		return tea.NewView("")
 	default:
 		return tea.NewView("Invalid archiving state")
 	}

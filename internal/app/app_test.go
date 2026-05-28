@@ -274,7 +274,7 @@ func TestRunPassesPopulatedScanResultToArchivingRunner(t *testing.T) {
 	}
 }
 
-func TestRunPrintsCancelledWhenArchivingRunnerCancels(t *testing.T) {
+func TestRunLeavesCancelledOutputToArchivingRunner(t *testing.T) {
 	cwd := t.TempDir()
 	stdout := new(bytes.Buffer)
 
@@ -295,8 +295,8 @@ func TestRunPrintsCancelledWhenArchivingRunnerCancels(t *testing.T) {
 	if code != ExitOK {
 		t.Fatalf("expected exit code %d, got %d", ExitOK, code)
 	}
-	if stdout.String() != "Cancelled\n" {
-		t.Fatalf("expected Cancelled output, got %q", stdout.String())
+	if stdout.String() != "" {
+		t.Fatalf("expected cancelled output to be owned by archiving runner, got %q", stdout.String())
 	}
 }
 

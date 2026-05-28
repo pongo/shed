@@ -148,7 +148,6 @@ func Run(ctx context.Context, opts Options) int {
 		return ExitError
 	}
 	if archiving.Outcome == ArchivingCancelled {
-		fmt.Fprintln(opts.Stdout, "Cancelled")
 		return ExitOK
 	}
 
