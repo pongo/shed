@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"runtime"
+
+	"shed/internal/core"
 )
 
 const (
@@ -26,21 +28,13 @@ type SelectedFolderResolver interface {
 }
 
 type Scanner interface {
-	Scan(ctx context.Context, selectedFolder string) (ScanResult, error)
-}
-
-type ScanResult struct {
-	StaleItems []StaleItem
-}
-
-type StaleItem struct {
-	DisplayName string
+	Scan(ctx context.Context, selectedFolder string) (core.ScanResult, error)
 }
 
 type EmptyScanner struct{}
 
-func (EmptyScanner) Scan(context.Context, string) (ScanResult, error) {
-	return ScanResult{}, nil
+func (EmptyScanner) Scan(context.Context, string) (core.ScanResult, error) {
+	return core.ScanResult{}, nil
 }
 
 type missingResolver struct{}
@@ -81,6 +75,9 @@ func Run(ctx context.Context, opts Options) int {
 
 	if len(result.StaleItems) == 0 {
 		fmt.Fprintln(opts.Stdout, "Nothing to move")
+		for _, skipped := range result.SkippedItems {
+			fmt.Fprintf(opts.Stdout, "Skipped: %s\n", skipped.Path)
+		}
 		return ExitOK
 	}
 

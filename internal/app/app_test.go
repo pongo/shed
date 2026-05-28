@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"shed/internal/core"
 )
 
 func TestRunSelectsCurrentWorkingDirectoryWithoutArgs(t *testing.T) {
@@ -200,19 +202,49 @@ func TestRunReportsScannerFailure(t *testing.T) {
 	}
 }
 
+func TestRunPrintsSkippedPathsWhenNothingCanMove(t *testing.T) {
+	cwd := t.TempDir()
+	stdout := new(bytes.Buffer)
+
+	code := Run(context.Background(), Options{
+		GOOS:   "windows",
+		Stdout: stdout,
+		Stderr: new(bytes.Buffer),
+		Scanner: &recordingScanner{
+			result: core.ScanResult{
+				SkippedItems: []core.SkippedItem{{Path: filepath.Join(cwd, "unreadable")}},
+			},
+		},
+		Resolver: fakeResolver{
+			cwd: cwd,
+			dirs: map[string]bool{
+				cwd: true,
+			},
+		},
+	})
+
+	if code != ExitOK {
+		t.Fatalf("expected exit code %d, got %d", ExitOK, code)
+	}
+	if !strings.Contains(stdout.String(), filepath.Join(cwd, "unreadable")) {
+		t.Fatalf("expected skipped path in output, got %q", stdout.String())
+	}
+}
+
 type recordingScanner struct {
 	called         bool
 	selectedFolder string
 	err            error
+	result         core.ScanResult
 }
 
-func (s *recordingScanner) Scan(_ context.Context, selectedFolder string) (ScanResult, error) {
+func (s *recordingScanner) Scan(_ context.Context, selectedFolder string) (core.ScanResult, error) {
 	s.called = true
 	s.selectedFolder = selectedFolder
 	if s.err != nil {
-		return ScanResult{}, s.err
+		return core.ScanResult{}, s.err
 	}
-	return ScanResult{}, nil
+	return s.result, nil
 }
 
 type fakeResolver struct {
