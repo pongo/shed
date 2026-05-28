@@ -3,12 +3,13 @@ package fs
 import (
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 type SelectedFolderResolver struct{}
 
 func (SelectedFolderResolver) Resolve(arg string) (string, error) {
-	selected := arg
+	selected := normalizeSelectedFolderArg(arg)
 	if selected == "" || selected == "." {
 		cwd, err := os.Getwd()
 		if err != nil {
@@ -31,6 +32,10 @@ func (SelectedFolderResolver) Resolve(arg string) (string, error) {
 	}
 
 	return absolute, nil
+}
+
+func normalizeSelectedFolderArg(arg string) string {
+	return strings.Trim(arg, `"`)
 }
 
 type NotDirectoryError struct {
