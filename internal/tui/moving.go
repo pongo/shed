@@ -16,8 +16,8 @@ type MovingRunner struct {
 	Output io.Writer
 }
 
-func (runner MovingRunner) RunMoving(ctx context.Context, move app.MoveFunc) (core.MoveSummary, error) {
-	model := newMovingModel(ctx, move)
+func (runner MovingRunner) RunMoving(ctx context.Context, move app.MoveFunc, view app.MoveViewData) (core.MoveSummary, error) {
+	model := newMovingModel(ctx, move, view)
 	program := tea.NewProgram(
 		model,
 		tea.WithContext(ctx),
@@ -39,9 +39,11 @@ func (runner MovingRunner) RunMoving(ctx context.Context, move app.MoveFunc) (co
 type movingModel struct {
 	ctx     context.Context
 	move    app.MoveFunc
+	view    app.MoveViewData
 	spinner spinner.Model
 	summary core.MoveSummary
 	err     error
+	done    bool
 }
 
 type moveFinishedMsg struct {
@@ -49,10 +51,11 @@ type moveFinishedMsg struct {
 	err     error
 }
 
-func newMovingModel(ctx context.Context, move app.MoveFunc) movingModel {
+func newMovingModel(ctx context.Context, move app.MoveFunc, view app.MoveViewData) movingModel {
 	return movingModel{
 		ctx:     ctx,
 		move:    move,
+		view:    view,
 		spinner: spinner.New(spinner.WithSpinner(spinner.Line)),
 	}
 }
@@ -71,6 +74,7 @@ func (m movingModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case moveFinishedMsg:
 		m.summary = msg.summary
 		m.err = msg.err
+		m.done = true
 		return m, tea.Quit
 	default:
 		var cmd tea.Cmd
@@ -80,5 +84,11 @@ func (m movingModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m movingModel) View() tea.View {
+	if m.done {
+		if m.err != nil {
+			return tea.NewView("")
+		}
+		return finalSummaryView(m.summary, m.view.SkippedItems)
+	}
 	return tea.NewView(m.spinner.View() + " Moving items into Archive")
 }

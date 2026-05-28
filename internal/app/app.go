@@ -47,7 +47,11 @@ type Mover interface {
 type MoveFunc func(ctx context.Context) (core.MoveSummary, error)
 
 type MovingRunner interface {
-	RunMoving(ctx context.Context, move MoveFunc) (core.MoveSummary, error)
+	RunMoving(ctx context.Context, move MoveFunc, view MoveViewData) (core.MoveSummary, error)
+}
+
+type MoveViewData struct {
+	SkippedItems []core.SkippedItem
 }
 
 type ConfirmationRequest struct {
@@ -131,27 +135,18 @@ func Run(ctx context.Context, opts Options) int {
 
 	summary, err := opts.Moving.RunMoving(ctx, func(ctx context.Context) (core.MoveSummary, error) {
 		return opts.Mover.Move(ctx, selectedFolder, result)
+	}, MoveViewData{
+		SkippedItems: result.SkippedItems,
 	})
 	if err != nil {
 		fmt.Fprintf(opts.Stderr, "Preflight failure: %v\n", err)
 		return ExitError
 	}
 
-	printMoveSummary(opts.Stdout, summary, result.SkippedItems)
 	if len(summary.FailedPaths) > 0 {
 		return ExitError
 	}
 	return ExitOK
-}
-
-func printMoveSummary(stdout io.Writer, summary core.MoveSummary, skippedItems []core.SkippedItem) {
-	fmt.Fprintf(stdout, "%s moved to %s\n", core.FormatSize(summary.MovedSize), summary.ArchiveBucket)
-	for _, failed := range summary.FailedPaths {
-		fmt.Fprintf(stdout, "Failed move: %s\n", failed)
-	}
-	for _, skipped := range skippedItems {
-		fmt.Fprintf(stdout, "Skipped item: %s\n", skipped.Path)
-	}
 }
 
 func withDefaults(opts Options) Options {
@@ -199,6 +194,6 @@ func (missingMover) Move(context.Context, string, core.ScanResult) (core.MoveSum
 
 type passthroughMovingRunner struct{}
 
-func (passthroughMovingRunner) RunMoving(ctx context.Context, move MoveFunc) (core.MoveSummary, error) {
+func (passthroughMovingRunner) RunMoving(ctx context.Context, move MoveFunc, _ MoveViewData) (core.MoveSummary, error) {
 	return move(ctx)
 }

@@ -55,6 +55,30 @@ func TestViewRendersConfirmationText(t *testing.T) {
 	}
 }
 
+func TestViewDoesNotUseAltScreen(t *testing.T) {
+	view := newConfirmationModel(testRequest()).View()
+
+	if view.AltScreen {
+		t.Fatalf("expected confirmation view to stay in the main screen buffer")
+	}
+}
+
+func TestViewClearsAfterConfirmationResult(t *testing.T) {
+	for _, msg := range []tea.KeyPressMsg{enterPress(), keyPress("n")} {
+		model := newConfirmationModel(testRequest())
+
+		updated, _ := model.Update(msg)
+		view := updated.(confirmationModel).View()
+
+		if view.Content != "" {
+			t.Fatalf("expected empty view after result, got:\n%s", view.Content)
+		}
+		if view.AltScreen {
+			t.Fatalf("expected cleared view to stay in the main screen buffer")
+		}
+	}
+}
+
 func TestViewUsesDisplayNamesOnly(t *testing.T) {
 	view := newConfirmationModel(testRequest()).View().Content
 
@@ -94,11 +118,25 @@ func TestWindowResizeUpdatesListHeight(t *testing.T) {
 func TestMovingModelRendersSpinnerState(t *testing.T) {
 	model := newMovingModel(context.Background(), func(context.Context) (core.MoveSummary, error) {
 		return core.MoveSummary{}, nil
-	})
+	}, app.MoveViewData{})
 
 	view := model.View().Content
 	if !strings.Contains(view, "Moving items into Archive") {
 		t.Fatalf("expected moving view, got %q", view)
+	}
+}
+
+func TestMovingModelRendersFinalSummaryAfterMove(t *testing.T) {
+	bucket := filepath.Join("C:", "Users", "pavel", "Shed")
+	model := newMovingModel(context.Background(), func(context.Context) (core.MoveSummary, error) {
+		return core.MoveSummary{MovedSize: 10, ArchiveBucket: bucket}, nil
+	}, app.MoveViewData{})
+
+	updated, _ := model.Update(moveFinishedMsg{summary: core.MoveSummary{MovedSize: 10, ArchiveBucket: bucket}})
+	view := updated.(movingModel).View().Content
+
+	if !strings.Contains(view, "10 B moved to "+bucket) {
+		t.Fatalf("expected final move summary, got %q", view)
 	}
 }
 

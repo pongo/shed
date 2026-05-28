@@ -300,13 +300,15 @@ func TestRunPrintsCancelledWhenConfirmerCancels(t *testing.T) {
 	}
 }
 
-func TestRunMovesAfterConfirmationAndPrintsFinalSummary(t *testing.T) {
+func TestRunMovesAfterConfirmationAndPassesViewData(t *testing.T) {
 	cwd := t.TempDir()
 	stdout := new(bytes.Buffer)
 	moving := &recordingMovingRunner{}
+	skippedPath := filepath.Join(cwd, "unreadable")
 	result := core.ScanResult{
-		StaleItems: []core.StaleItem{{DisplayName: "old.txt", Path: filepath.Join(cwd, "old.txt"), MoveSize: 10}},
-		MoveSize:   10,
+		StaleItems:   []core.StaleItem{{DisplayName: "old.txt", Path: filepath.Join(cwd, "old.txt"), MoveSize: 10}},
+		SkippedItems: []core.SkippedItem{{Path: skippedPath}},
+		MoveSize:     10,
 	}
 	bucket := filepath.Join(cwd, "Shed", "2026", "05", filepath.Base(cwd))
 	mover := &recordingMover{summary: core.MoveSummary{ArchiveBucket: bucket, MovedSize: 10}}
@@ -336,22 +338,21 @@ func TestRunMovesAfterConfirmationAndPrintsFinalSummary(t *testing.T) {
 	if !moving.called {
 		t.Fatalf("expected moving runner to be called")
 	}
-	output := stdout.String()
-	for _, want := range []string{"10 B moved to " + bucket} {
-		if !strings.Contains(output, want) {
-			t.Fatalf("expected output to contain %q, got %q", want, output)
-		}
+	if stdout.String() != "" {
+		t.Fatalf("expected final move summary to be owned by moving runner, got stdout %q", stdout.String())
+	}
+	if len(moving.view.SkippedItems) != 1 || moving.view.SkippedItems[0].Path != skippedPath {
+		t.Fatalf("expected skipped items to be passed to moving runner, got %#v", moving.view.SkippedItems)
 	}
 }
 
 func TestRunReportsFailedMovesAndExitsNonZero(t *testing.T) {
 	cwd := t.TempDir()
-	stdout := new(bytes.Buffer)
 	failedPath := filepath.Join(cwd, "locked.txt")
 
 	code := Run(context.Background(), Options{
 		GOOS:      "windows",
-		Stdout:    stdout,
+		Stdout:    new(bytes.Buffer),
 		Stderr:    new(bytes.Buffer),
 		Scanner:   &recordingScanner{result: core.ScanResult{StaleItems: []core.StaleItem{{DisplayName: "locked.txt", Path: failedPath}}}},
 		Confirmer: &recordingConfirmer{outcome: ConfirmationConfirmed},
@@ -369,9 +370,6 @@ func TestRunReportsFailedMovesAndExitsNonZero(t *testing.T) {
 
 	if code == ExitOK {
 		t.Fatalf("expected non-zero exit code")
-	}
-	if !strings.Contains(stdout.String(), "Failed move: "+failedPath) {
-		t.Fatalf("expected failed path in output, got %q", stdout.String())
 	}
 }
 
@@ -402,9 +400,10 @@ func TestRunReportsPreflightFailureBeforeSummary(t *testing.T) {
 	}
 }
 
-func TestRunPrintsSkippedPathsAfterConfirmedRun(t *testing.T) {
+func TestRunPassesSkippedPathsAfterConfirmedRun(t *testing.T) {
 	cwd := t.TempDir()
 	stdout := new(bytes.Buffer)
+	moving := &recordingMovingRunner{}
 	skippedPath := filepath.Join(cwd, "unreadable")
 
 	code := Run(context.Background(), Options{
@@ -417,6 +416,7 @@ func TestRunPrintsSkippedPathsAfterConfirmedRun(t *testing.T) {
 		}},
 		Confirmer: &recordingConfirmer{outcome: ConfirmationConfirmed},
 		Mover:     &recordingMover{summary: core.MoveSummary{ArchiveBucket: filepath.Join(cwd, "Shed")}},
+		Moving:    moving,
 		Resolver: fakeResolver{
 			cwd: cwd,
 			dirs: map[string]bool{
@@ -428,8 +428,11 @@ func TestRunPrintsSkippedPathsAfterConfirmedRun(t *testing.T) {
 	if code != ExitOK {
 		t.Fatalf("expected exit code %d, got %d", ExitOK, code)
 	}
-	if !strings.Contains(stdout.String(), "Skipped item: "+skippedPath) {
-		t.Fatalf("expected skipped path after run, got %q", stdout.String())
+	if stdout.String() != "" {
+		t.Fatalf("expected final move summary to be owned by moving runner, got stdout %q", stdout.String())
+	}
+	if len(moving.view.SkippedItems) != 1 || moving.view.SkippedItems[0].Path != skippedPath {
+		t.Fatalf("expected skipped item to be passed to moving runner, got %#v", moving.view.SkippedItems)
 	}
 }
 
@@ -511,10 +514,12 @@ func (m *recordingMover) Move(_ context.Context, selectedFolder string, scan cor
 
 type recordingMovingRunner struct {
 	called bool
+	view   MoveViewData
 }
 
-func (runner *recordingMovingRunner) RunMoving(ctx context.Context, move MoveFunc) (core.MoveSummary, error) {
+func (runner *recordingMovingRunner) RunMoving(ctx context.Context, move MoveFunc, view MoveViewData) (core.MoveSummary, error) {
 	runner.called = true
+	runner.view = view
 	return move(ctx)
 }
 

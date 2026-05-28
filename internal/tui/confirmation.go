@@ -117,6 +117,10 @@ func isCtrlC(msg tea.KeyPressMsg) bool {
 }
 
 func (m confirmationModel) View() tea.View {
+	if m.result != confirmationNone {
+		return tea.NewView("")
+	}
+
 	var parts []string
 	parts = append(parts, headerView(m.request.HeaderTitle))
 	parts = append(parts, "")
