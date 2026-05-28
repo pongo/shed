@@ -148,6 +148,8 @@ var headerStyle = lipgloss.NewStyle().
 	Background(lipgloss.Color("170")).Padding(0, 1).
 	Foreground(lipgloss.Color("255"))
 
+var listItemStyle = lipgloss.NewStyle()
+
 func headerView(title string) string {
 	return headerStyle.Render(title)
 }
@@ -181,5 +183,5 @@ func (displayNameDelegate) Update(tea.Msg, *list.Model) tea.Cmd {
 }
 
 func (displayNameDelegate) Render(w io.Writer, _ list.Model, _ int, item list.Item) {
-	fmt.Fprint(w, listItemIndent, item.FilterValue())
+	fmt.Fprint(w, listItemStyle.Render(listItemIndent+item.FilterValue()))
 }
