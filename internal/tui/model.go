@@ -117,7 +117,9 @@ func isCtrlC(msg tea.KeyPressMsg) bool {
 func (m Model) View() tea.View {
 	var parts []string
 	parts = append(parts, headerView(m.request.HeaderTitle))
+	parts = append(parts, "")
 	parts = append(parts, summaryView(m.request))
+	parts = append(parts, "")
 	parts = append(parts, m.list.View())
 	parts = append(parts, m.help.View(m.keys))
 	return tea.NewView(strings.Join(parts, "\n"))
@@ -132,7 +134,7 @@ func (m Model) ListHeight() int {
 }
 
 func listHeight(windowHeight int) int {
-	const reservedRows = 7
+	const reservedRows = 5
 	height := windowHeight - reservedRows
 	if height < 3 {
 		return 3
@@ -149,14 +151,11 @@ func headerView(title string) string {
 }
 
 func summaryView(request app.ConfirmationRequest) string {
-	lines := []string{
-		fmt.Sprintf("Move size: %s", core.FormatSize(request.ScanResult.MoveSize)),
-		fmt.Sprintf("Archive bucket: %s", request.CompactArchiveBucket),
-	}
+	summary := fmt.Sprintf("%s will be moved to %s. Press y/enter to confirm.", core.FormatSize(request.ScanResult.MoveSize), request.CompactArchiveBucket)
 	if skipped := len(request.ScanResult.SkippedItems); skipped > 0 {
-		lines = append(lines, fmt.Sprintf("Skipped items: %d", skipped))
+		summary = fmt.Sprintf("%s Skipped items: %d.", summary, skipped)
 	}
-	return strings.Join(lines, "\n")
+	return summary
 }
 
 type staleListItem string

@@ -41,10 +41,17 @@ func TestModelCancelsWithConfiguredKeys(t *testing.T) {
 func TestViewRendersConfirmationText(t *testing.T) {
 	view := NewModel(testRequest()).View().Content
 
-	for _, want := range []string{"Downloads", "Move size: 3 KB", "Archive bucket: " + filepath.Join("~", "Shed", "2026", "05", "Downloads"), "Skipped items: 2", "old-folder", "old-file.txt", "y/enter", "n/q/esc"} {
+	for _, want := range []string{"Downloads", "3 KB will be moved to " + filepath.Join("~", "Shed", "2026", "05", "Downloads"), "Press y/enter to confirm.", "Skipped items: 2.", "old-folder", "old-file.txt", "y/enter", "n/q/esc"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("expected view to contain %q, got:\n%s", want, view)
 		}
+	}
+
+	if !strings.Contains(view, "\n\n3 KB will be moved") {
+		t.Fatalf("expected blank space after header, got:\n%s", view)
+	}
+	if !strings.Contains(view, "Skipped items: 2.\n\nold-folder") {
+		t.Fatalf("expected blank space before list, got:\n%s", view)
 	}
 }
 
@@ -64,8 +71,8 @@ func TestWindowResizeUpdatesListHeight(t *testing.T) {
 	updated, _ := model.Update(tea.WindowSizeMsg{Width: 100, Height: 24})
 	resized := updated.(Model)
 
-	if resized.ListHeight() != 17 {
-		t.Fatalf("expected list height 17, got %d", resized.ListHeight())
+	if resized.ListHeight() != 19 {
+		t.Fatalf("expected list height 19, got %d", resized.ListHeight())
 	}
 }
 
