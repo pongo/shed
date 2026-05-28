@@ -151,10 +151,10 @@ func headerView(title string) string {
 func summaryView(request app.ConfirmationRequest) string {
 	lines := []string{
 		fmt.Sprintf("Move size: %s", core.FormatSize(request.ScanResult.MoveSize)),
-		fmt.Sprintf("Archive: %s", request.CompactArchiveBucket),
+		fmt.Sprintf("Archive bucket: %s", request.CompactArchiveBucket),
 	}
 	if skipped := len(request.ScanResult.SkippedItems); skipped > 0 {
-		lines = append(lines, fmt.Sprintf("Skipped: %d", skipped))
+		lines = append(lines, fmt.Sprintf("Skipped items: %d", skipped))
 	}
 	return strings.Join(lines, "\n")
 }

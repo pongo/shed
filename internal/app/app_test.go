@@ -116,7 +116,7 @@ func TestRunReportsUsageErrorForTooManyArgs(t *testing.T) {
 	if scanner.called {
 		t.Fatalf("scanner should not be called for usage errors")
 	}
-	if !strings.Contains(stderr.String(), "usage: shed [folder]") {
+	if !strings.Contains(stderr.String(), "Usage: shed [folder]") {
 		t.Fatalf("expected usage error, got %q", stderr.String())
 	}
 }
@@ -147,7 +147,7 @@ func TestRunReportsInvalidSelectedFolder(t *testing.T) {
 	if scanner.called {
 		t.Fatalf("scanner should not be called for invalid selected folders")
 	}
-	if !strings.Contains(stderr.String(), "invalid selected folder") {
+	if !strings.Contains(stderr.String(), "Invalid selected folder") {
 		t.Fatalf("expected invalid selected folder error, got %q", stderr.String())
 	}
 }
@@ -198,7 +198,7 @@ func TestRunReportsScannerFailure(t *testing.T) {
 	if code == ExitOK {
 		t.Fatalf("expected non-zero exit code")
 	}
-	if !strings.Contains(stderr.String(), "scan failed") {
+	if !strings.Contains(stderr.String(), "Scan failed") {
 		t.Fatalf("expected scan failure, got %q", stderr.String())
 	}
 }
@@ -303,6 +303,7 @@ func TestRunPrintsCancelledWhenConfirmerCancels(t *testing.T) {
 func TestRunMovesAfterConfirmationAndPrintsFinalSummary(t *testing.T) {
 	cwd := t.TempDir()
 	stdout := new(bytes.Buffer)
+	moving := &recordingMovingRunner{}
 	result := core.ScanResult{
 		StaleItems: []core.StaleItem{{DisplayName: "old.txt", Path: filepath.Join(cwd, "old.txt"), MoveSize: 10}},
 		MoveSize:   10,
@@ -317,6 +318,7 @@ func TestRunMovesAfterConfirmationAndPrintsFinalSummary(t *testing.T) {
 		Scanner:   &recordingScanner{result: result},
 		Confirmer: &recordingConfirmer{outcome: ConfirmationConfirmed},
 		Mover:     mover,
+		Moving:    moving,
 		Resolver: fakeResolver{
 			cwd: cwd,
 			dirs: map[string]bool{
@@ -331,8 +333,11 @@ func TestRunMovesAfterConfirmationAndPrintsFinalSummary(t *testing.T) {
 	if !mover.called {
 		t.Fatalf("expected mover to be called")
 	}
+	if !moving.called {
+		t.Fatalf("expected moving runner to be called")
+	}
 	output := stdout.String()
-	for _, want := range []string{"Moved: 10 B", "Archive: " + bucket} {
+	for _, want := range []string{"Moved size: 10 B", "Archive bucket: " + bucket} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("expected output to contain %q, got %q", want, output)
 		}
@@ -365,7 +370,7 @@ func TestRunReportsFailedMovesAndExitsNonZero(t *testing.T) {
 	if code == ExitOK {
 		t.Fatalf("expected non-zero exit code")
 	}
-	if !strings.Contains(stdout.String(), "Failed: "+failedPath) {
+	if !strings.Contains(stdout.String(), "Failed move: "+failedPath) {
 		t.Fatalf("expected failed path in output, got %q", stdout.String())
 	}
 }
@@ -392,7 +397,7 @@ func TestRunReportsPreflightFailureBeforeSummary(t *testing.T) {
 	if code == ExitOK {
 		t.Fatalf("expected non-zero exit code")
 	}
-	if !strings.Contains(stderr.String(), "preflight failed") {
+	if !strings.Contains(stderr.String(), "Preflight failure") {
 		t.Fatalf("expected preflight failure, got %q", stderr.String())
 	}
 }
@@ -423,7 +428,7 @@ func TestRunPrintsSkippedPathsAfterConfirmedRun(t *testing.T) {
 	if code != ExitOK {
 		t.Fatalf("expected exit code %d, got %d", ExitOK, code)
 	}
-	if !strings.Contains(stdout.String(), "Skipped: "+skippedPath) {
+	if !strings.Contains(stdout.String(), "Skipped item: "+skippedPath) {
 		t.Fatalf("expected skipped path after run, got %q", stdout.String())
 	}
 }
@@ -502,6 +507,15 @@ func (m *recordingMover) Move(_ context.Context, selectedFolder string, scan cor
 		return core.MoveSummary{}, m.err
 	}
 	return m.summary, nil
+}
+
+type recordingMovingRunner struct {
+	called bool
+}
+
+func (runner *recordingMovingRunner) RunMoving(ctx context.Context, move MoveFunc) (core.MoveSummary, error) {
+	runner.called = true
+	return move(ctx)
 }
 
 type fakeResolver struct {

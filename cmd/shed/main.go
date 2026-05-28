@@ -11,6 +11,14 @@ import (
 )
 
 func main() {
+	if shedfs.UnsupportedPlatform() {
+		os.Exit(app.Run(context.Background(), app.Options{
+			Args:   os.Args[1:],
+			Stdout: os.Stdout,
+			Stderr: os.Stderr,
+		}))
+	}
+
 	archiveRoot, err := shedfs.UserArchiveRoot()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Archive path unavailable: %v\n", err)

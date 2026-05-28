@@ -41,7 +41,7 @@ func TestModelCancelsWithConfiguredKeys(t *testing.T) {
 func TestViewRendersConfirmationText(t *testing.T) {
 	view := NewModel(testRequest()).View().Content
 
-	for _, want := range []string{"Downloads", "Move size: 3 KB", filepath.Join("~", "Shed", "2026", "05", "Downloads"), "Skipped: 2", "old-folder", "old-file.txt", "y/enter", "n/q/esc"} {
+	for _, want := range []string{"Downloads", "Move size: 3 KB", "Archive bucket: " + filepath.Join("~", "Shed", "2026", "05", "Downloads"), "Skipped items: 2", "old-folder", "old-file.txt", "y/enter", "n/q/esc"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("expected view to contain %q, got:\n%s", want, view)
 		}

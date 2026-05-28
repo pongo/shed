@@ -90,12 +90,13 @@ func TestSortStaleItemsFoldersFirstThenCaseInsensitiveNames(t *testing.T) {
 		{DisplayName: "Beta", Kind: FolderItem},
 		{DisplayName: "alpha.txt", Kind: FileItem},
 		{DisplayName: "Alpha", Kind: FolderItem},
+		{DisplayName: "ALPHA.txt", Kind: FileItem},
 	}
 
 	SortStaleItems(items)
 
 	names := staleNames(items)
-	want := []string{"Alpha", "Beta", "alpha.txt", "z.txt"}
+	want := []string{"Alpha", "Beta", "ALPHA.txt", "alpha.txt", "z.txt"}
 	if !equalStrings(names, want) {
 		t.Fatalf("expected sorted names %v, got %v", want, names)
 	}
@@ -127,9 +128,10 @@ func TestIsArchiveSource(t *testing.T) {
 
 func TestFormatSize(t *testing.T) {
 	tests := map[int64]string{
-		12:              "12 B",
-		2 * 1024:        "2 KB",
-		3 * 1024 * 1024: "3 MB",
+		12:                     "12 B",
+		2 * 1024:               "2 KB",
+		3 * 1024 * 1024:        "3 MB",
+		4 * 1024 * 1024 * 1024: "4 GB",
 	}
 
 	for size, want := range tests {

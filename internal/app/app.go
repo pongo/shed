@@ -85,7 +85,7 @@ func Run(ctx context.Context, opts Options) int {
 	}
 
 	if len(opts.Args) > 1 {
-		fmt.Fprintln(opts.Stderr, "usage: shed [folder]")
+		fmt.Fprintln(opts.Stderr, "Usage: shed [folder]")
 		return ExitError
 	}
 
@@ -96,20 +96,20 @@ func Run(ctx context.Context, opts Options) int {
 
 	selectedFolder, err := opts.Resolver.Resolve(arg)
 	if err != nil {
-		fmt.Fprintf(opts.Stderr, "invalid selected folder: %v\n", err)
+		fmt.Fprintf(opts.Stderr, "Invalid selected folder: %v\n", err)
 		return ExitError
 	}
 
 	result, err := opts.Scanner.Scan(ctx, selectedFolder)
 	if err != nil {
-		fmt.Fprintf(opts.Stderr, "scan failed: %v\n", err)
+		fmt.Fprintf(opts.Stderr, "Scan failed: %v\n", err)
 		return ExitError
 	}
 
 	if len(result.StaleItems) == 0 {
 		fmt.Fprintln(opts.Stdout, "Nothing to move")
 		for _, skipped := range result.SkippedItems {
-			fmt.Fprintf(opts.Stdout, "Skipped: %s\n", skipped.Path)
+			fmt.Fprintf(opts.Stdout, "Skipped item: %s\n", skipped.Path)
 		}
 		return ExitOK
 	}
@@ -121,7 +121,7 @@ func Run(ctx context.Context, opts Options) int {
 		ScanResult:           result,
 	})
 	if err != nil {
-		fmt.Fprintf(opts.Stderr, "confirmation failed: %v\n", err)
+		fmt.Fprintf(opts.Stderr, "Confirmation failed: %v\n", err)
 		return ExitError
 	}
 	if outcome == ConfirmationCancelled {
@@ -133,7 +133,7 @@ func Run(ctx context.Context, opts Options) int {
 		return opts.Mover.Move(ctx, selectedFolder, result)
 	})
 	if err != nil {
-		fmt.Fprintf(opts.Stderr, "preflight failed: %v\n", err)
+		fmt.Fprintf(opts.Stderr, "Preflight failure: %v\n", err)
 		return ExitError
 	}
 
@@ -145,13 +145,13 @@ func Run(ctx context.Context, opts Options) int {
 }
 
 func printMoveSummary(stdout io.Writer, summary core.MoveSummary, skippedItems []core.SkippedItem) {
-	fmt.Fprintf(stdout, "Moved: %s\n", core.FormatSize(summary.MovedSize))
-	fmt.Fprintf(stdout, "Archive: %s\n", summary.ArchiveBucket)
+	fmt.Fprintf(stdout, "Moved size: %s\n", core.FormatSize(summary.MovedSize))
+	fmt.Fprintf(stdout, "Archive bucket: %s\n", summary.ArchiveBucket)
 	for _, failed := range summary.FailedPaths {
-		fmt.Fprintf(stdout, "Failed: %s\n", failed)
+		fmt.Fprintf(stdout, "Failed move: %s\n", failed)
 	}
 	for _, skipped := range skippedItems {
-		fmt.Fprintf(stdout, "Skipped: %s\n", skipped.Path)
+		fmt.Fprintf(stdout, "Skipped item: %s\n", skipped.Path)
 	}
 }
 

@@ -71,6 +71,44 @@ func TestMoverRenamesFileConflictWithNumberedSuffix(t *testing.T) {
 	}
 }
 
+func TestMoverRenamesSymlinkConflictWithNumberedSuffix(t *testing.T) {
+	now := time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)
+	root := t.TempDir()
+	selected := filepath.Join(root, "Downloads")
+	archive := filepath.Join(root, "Shed")
+	bucket := filepath.Join(archive, "2026", "05", "Downloads")
+	if err := os.MkdirAll(bucket, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(selected, 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	target := filepath.Join(root, "target.txt")
+	writeFile(t, target, "target")
+	source := filepath.Join(selected, "shortcut")
+	if err := os.Symlink(target, source); err != nil {
+		t.Skipf("symlink creation unavailable: %v", err)
+	}
+	writeFile(t, filepath.Join(bucket, "shortcut"), "existing")
+
+	_, err := Mover{ArchiveRoot: archive, Now: func() time.Time { return now }}.Move(context.Background(), selected, core.ScanResult{
+		StaleItems: []core.StaleItem{{DisplayName: "shortcut", Path: source, Kind: core.SymlinkItem}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	targetPath := filepath.Join(bucket, "shortcut (1)")
+	info, err := os.Lstat(targetPath)
+	if err != nil {
+		t.Fatalf("expected conflict symlink target at %q: %v", targetPath, err)
+	}
+	if info.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("expected moved item to remain a symlink")
+	}
+}
+
 func TestMoverMergesFolderConflictsRecursively(t *testing.T) {
 	now := time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)
 	root := t.TempDir()
