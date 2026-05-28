@@ -1,11 +1,13 @@
 package archiving
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -57,7 +59,7 @@ func TestArchivingModelTransitionsFromConfirmationToMoving(t *testing.T) {
 	}
 }
 
-func TestArchivingModelRendersCancelledViewAfterCancel(t *testing.T) {
+func TestArchivingModelClearsManagedViewAfterCancel(t *testing.T) {
 	initialModel := newModel(context.Background(), testArchivingRequest())
 
 	updated, _ := initialModel.Update(escapePress())
@@ -67,15 +69,91 @@ func TestArchivingModelRendersCancelledViewAfterCancel(t *testing.T) {
 	if archiving.phase != phaseCancelled {
 		t.Fatalf("expected cancelled phase, got %v", archiving.phase)
 	}
-	if view.Content != "Cancelled" {
-		t.Fatalf("expected cancelled view, got %q", view.Content)
+	if view.Content != "" {
+		t.Fatalf("expected cancelled phase to clear managed view, got %q", view.Content)
 	}
 	if view.AltScreen {
 		t.Fatalf("expected cancelled view to stay in the main screen buffer")
 	}
 }
 
-func TestArchivingModelRendersFinalSummaryAfterMove(t *testing.T) {
+func TestRunnerRendersCancelledOutputAfterEscape(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	output := new(bytes.Buffer)
+
+	result, err := (Runner{
+		Input:  strings.NewReader("\x1b"),
+		Output: output,
+	}).RunArchiving(ctx, testArchivingRequest())
+
+	if err != nil {
+		t.Fatalf("expected runner to finish without error, got %v", err)
+	}
+	if result.Outcome != app.ArchivingCancelled {
+		t.Fatalf("expected cancelled outcome, got %v", result.Outcome)
+	}
+	if !strings.Contains(output.String(), "Cancelled") {
+		t.Fatalf("expected output to contain Cancelled, got %q", output.String())
+	}
+}
+
+func TestRunnerRendersFinalSummaryOutputAfterMove(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	output := new(bytes.Buffer)
+	bucket := filepath.Join("C:", "Users", "pavel", "Shed")
+
+	result, err := (Runner{
+		Input:  strings.NewReader("\r"),
+		Output: output,
+	}).RunArchiving(ctx, app.ArchivingRequest{
+		Confirmation: testRequest(),
+		Move: func(context.Context) (core.MoveSummary, error) {
+			return core.MoveSummary{MovedSize: 10, ArchiveBucket: bucket}, nil
+		},
+		View: app.MoveViewData{},
+	})
+
+	if err != nil {
+		t.Fatalf("expected runner to finish without error, got %v", err)
+	}
+	if result.Outcome != app.ArchivingCompleted {
+		t.Fatalf("expected completed outcome, got %v", result.Outcome)
+	}
+	if !strings.Contains(output.String(), "10 B moved to "+bucket) {
+		t.Fatalf("expected output to contain final summary, got %q", output.String())
+	}
+}
+
+func TestRunnerRendersPreflightFailureOutputAfterMoveError(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	output := new(bytes.Buffer)
+
+	result, err := (Runner{
+		Input:  strings.NewReader("\r"),
+		Output: output,
+	}).RunArchiving(ctx, app.ArchivingRequest{
+		Confirmation: testRequest(),
+		Move: func(context.Context) (core.MoveSummary, error) {
+			return core.MoveSummary{}, errors.New("selected folder unavailable")
+		},
+		View: app.MoveViewData{},
+	})
+
+	if err == nil {
+		t.Fatalf("expected move error")
+	}
+	if result.Outcome != app.ArchivingCompleted {
+		t.Fatalf("expected completed outcome for attempted archiving, got %v", result.Outcome)
+	}
+	if !strings.Contains(output.String(), "Preflight failure: selected folder unavailable") {
+		t.Fatalf("expected output to contain preflight failure, got %q", output.String())
+	}
+}
+
+func TestArchivingModelClearsManagedViewAfterMove(t *testing.T) {
 	bucket := filepath.Join("C:", "Users", "pavel", "Shed")
 	initialModel := newModel(context.Background(), testArchivingRequest())
 	initialModel.phase = phaseMoving
@@ -87,8 +165,8 @@ func TestArchivingModelRendersFinalSummaryAfterMove(t *testing.T) {
 	if archiving.phase != phaseFinal {
 		t.Fatalf("expected final phase, got %v", archiving.phase)
 	}
-	if !strings.Contains(view, "10 B moved to "+bucket) {
-		t.Fatalf("expected final move summary, got %q", view)
+	if view != "" {
+		t.Fatalf("expected final phase to clear managed view, got %q", view)
 	}
 }
 
@@ -103,8 +181,8 @@ func TestArchivingModelRendersPreflightFailureAfterMoveError(t *testing.T) {
 	if archiving.phase != phasePreflightFailure {
 		t.Fatalf("expected preflight failure phase, got %v", archiving.phase)
 	}
-	if view != "Preflight failure: selected folder unavailable" {
-		t.Fatalf("expected preflight failure view, got %q", view)
+	if view != "" {
+		t.Fatalf("expected preflight failure phase to clear managed view, got %q", view)
 	}
 }
 

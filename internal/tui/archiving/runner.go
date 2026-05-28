@@ -2,6 +2,7 @@ package archiving
 
 import (
 	"context"
+	"fmt"
 	"io"
 
 	tea "charm.land/bubbletea/v2"
@@ -17,11 +18,15 @@ type Runner struct {
 
 func (runner Runner) RunArchiving(ctx context.Context, request app.ArchivingRequest) (app.ArchivingResult, error) {
 	initialModel := newModel(ctx, request)
+	output := runner.Output
+	if output == nil {
+		output = io.Discard
+	}
 	program := tea.NewProgram(
 		initialModel,
 		tea.WithContext(ctx),
 		tea.WithInput(runner.Input),
-		tea.WithOutput(runner.Output),
+		tea.WithOutput(output),
 	)
 
 	finalModel, err := program.Run()
@@ -33,7 +38,14 @@ func (runner Runner) RunArchiving(ctx context.Context, request app.ArchivingRequ
 		return app.ArchivingResult{}, nil
 	}
 	if archiving.cancelled {
+		fmt.Fprintln(output, "Cancelled")
 		return app.ArchivingResult{Outcome: app.ArchivingCancelled}, nil
+	}
+	if archiving.err != nil {
+		fmt.Fprintf(output, "Preflight failure: %v\n", archiving.err)
+	}
+	if archiving.err == nil {
+		fmt.Fprint(output, formatFinalSummary(archiving.summary, request.View.SkippedItems))
 	}
 	return app.ArchivingResult{
 		Outcome: app.ArchivingCompleted,
@@ -132,11 +144,11 @@ func (m model) View() tea.View {
 	case phaseMoving:
 		return m.moving.View()
 	case phaseFinal:
-		return finalSummaryView(m.summary, m.request.View.SkippedItems)
+		return tea.NewView("")
 	case phaseCancelled:
-		return tea.NewView("Cancelled")
+		return tea.NewView("")
 	case phasePreflightFailure:
-		return tea.NewView("Preflight failure: " + m.err.Error())
+		return tea.NewView("")
 	default:
 		return tea.NewView("Invalid archiving state")
 	}
