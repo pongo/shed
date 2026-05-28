@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -18,11 +19,15 @@ type Runner struct {
 
 func (runner Runner) RunArchiving(ctx context.Context, request app.ArchivingRequest) (app.ArchivingResult, error) {
 	initialModel := newModel(ctx, request)
+	output := runner.Output
+	if output == nil {
+		output = io.Discard
+	}
 	program := tea.NewProgram(
 		initialModel,
 		tea.WithContext(ctx),
 		tea.WithInput(runner.Input),
-		tea.WithOutput(runner.Output),
+		tea.WithOutput(output),
 	)
 
 	finalModel, err := program.Run()
@@ -34,7 +39,14 @@ func (runner Runner) RunArchiving(ctx context.Context, request app.ArchivingRequ
 		return app.ArchivingResult{}, nil
 	}
 	if archiving.cancelled {
+		fmt.Fprintln(output, "Cancelled")
 		return app.ArchivingResult{Outcome: app.ArchivingCancelled}, nil
+	}
+	if archiving.err != nil {
+		fmt.Fprintf(output, "Preflight failure: %v\n", archiving.err)
+	}
+	if archiving.err == nil {
+		fmt.Fprint(output, formatFinalSummary(archiving.summary, request.View.SkippedItems))
 	}
 	return app.ArchivingResult{
 		Outcome: app.ArchivingCompleted,
@@ -49,6 +61,7 @@ const (
 	phaseMoving
 	phaseFinal
 	phaseCancelled
+	phasePreflightFailure
 )
 
 type model struct {
@@ -61,6 +74,10 @@ type model struct {
 	err          error
 	cancelled    bool
 }
+
+type quitMsg struct{}
+
+const finalRenderDelay = 50 * time.Millisecond
 
 func newModel(ctx context.Context, request app.ArchivingRequest) model {
 	return model{
@@ -76,6 +93,10 @@ func (m model) Init() tea.Cmd {
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if _, ok := msg.(quitMsg); ok {
+		return m, tea.Quit
+	}
+
 	switch m.phase {
 	case phaseConfirming:
 		return m.updateConfirmation(msg)
@@ -84,6 +105,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case phaseFinal:
 		return m, nil
 	case phaseCancelled:
+		return m, nil
+	case phasePreflightFailure:
 		return m, nil
 	default:
 		return m, nil
@@ -101,7 +124,7 @@ func (m model) updateConfirmation(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case confirmationCancelled:
 		m.cancelled = true
 		m.phase = phaseCancelled
-		return m, tea.Sequence(tea.Println("Cancelled"), tea.Quit)
+		return m, quitAfterClearRender
 	default:
 		return m, cmd
 	}
@@ -114,13 +137,18 @@ func (m model) updateMoving(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.summary = m.moving.summary
 		m.err = m.moving.err
 		if m.err != nil {
-			m.phase = phaseFinal
-			return m, tea.Sequence(tea.Println(fmt.Sprintf("Preflight failure: %v", m.err)), tea.Quit)
+			m.phase = phasePreflightFailure
+			return m, quitAfterClearRender
 		}
 		m.phase = phaseFinal
-		return m, tea.Sequence(tea.Println(formatFinalSummary(m.summary, m.request.View.SkippedItems)), tea.Quit)
+		return m, quitAfterClearRender
 	}
 	return m, cmd
+}
+
+func quitAfterClearRender() tea.Msg {
+	time.Sleep(finalRenderDelay)
+	return quitMsg{}
 }
 
 func (m model) View() tea.View {
@@ -132,6 +160,8 @@ func (m model) View() tea.View {
 	case phaseFinal:
 		return tea.NewView("")
 	case phaseCancelled:
+		return tea.NewView("")
+	case phasePreflightFailure:
 		return tea.NewView("")
 	default:
 		return tea.NewView("Invalid archiving state")
