@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"shed/internal/core"
 )
@@ -231,6 +232,99 @@ func TestRunPrintsSkippedPathsWhenNothingCanMove(t *testing.T) {
 	}
 }
 
+func TestRunPassesPopulatedScanResultToConfirmer(t *testing.T) {
+	cwd := t.TempDir()
+	moveDate := time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)
+	confirmer := &recordingConfirmer{outcome: ConfirmationConfirmed}
+	result := core.ScanResult{
+		StaleItems: []core.StaleItem{{DisplayName: "old.txt", Kind: core.FileItem, MoveSize: 10}},
+		MoveSize:   10,
+	}
+
+	code := Run(context.Background(), Options{
+		GOOS:      "windows",
+		Stdout:    new(bytes.Buffer),
+		Stderr:    new(bytes.Buffer),
+		Scanner:   &recordingScanner{result: result},
+		Confirmer: confirmer,
+		Now:       func() time.Time { return moveDate },
+		Resolver: fakeResolver{
+			cwd: cwd,
+			dirs: map[string]bool{
+				cwd: true,
+			},
+		},
+	})
+
+	if code != ExitOK {
+		t.Fatalf("expected exit code %d, got %d", ExitOK, code)
+	}
+	if !confirmer.called {
+		t.Fatalf("expected confirmer to be called")
+	}
+	if confirmer.request.SelectedFolder != cwd {
+		t.Fatalf("expected selected folder %q, got %q", cwd, confirmer.request.SelectedFolder)
+	}
+	if confirmer.request.HeaderTitle != filepath.Base(cwd) {
+		t.Fatalf("expected header title %q, got %q", filepath.Base(cwd), confirmer.request.HeaderTitle)
+	}
+	if !strings.Contains(confirmer.request.CompactArchiveBucket, filepath.Join("~", "Shed", "2026", "05")) {
+		t.Fatalf("expected compact archive bucket with move date, got %q", confirmer.request.CompactArchiveBucket)
+	}
+}
+
+func TestRunPrintsCancelledWhenConfirmerCancels(t *testing.T) {
+	cwd := t.TempDir()
+	stdout := new(bytes.Buffer)
+
+	code := Run(context.Background(), Options{
+		GOOS:      "windows",
+		Stdout:    stdout,
+		Stderr:    new(bytes.Buffer),
+		Scanner:   &recordingScanner{result: core.ScanResult{StaleItems: []core.StaleItem{{DisplayName: "old.txt"}}}},
+		Confirmer: &recordingConfirmer{outcome: ConfirmationCancelled},
+		Resolver: fakeResolver{
+			cwd: cwd,
+			dirs: map[string]bool{
+				cwd: true,
+			},
+		},
+	})
+
+	if code != ExitOK {
+		t.Fatalf("expected exit code %d, got %d", ExitOK, code)
+	}
+	if stdout.String() != "Cancelled\n" {
+		t.Fatalf("expected Cancelled output, got %q", stdout.String())
+	}
+}
+
+func TestRunReportsConfirmerFailure(t *testing.T) {
+	cwd := t.TempDir()
+	stderr := new(bytes.Buffer)
+
+	code := Run(context.Background(), Options{
+		GOOS:      "windows",
+		Stdout:    new(bytes.Buffer),
+		Stderr:    stderr,
+		Scanner:   &recordingScanner{result: core.ScanResult{StaleItems: []core.StaleItem{{DisplayName: "old.txt"}}}},
+		Confirmer: &recordingConfirmer{err: errors.New("terminal unavailable")},
+		Resolver: fakeResolver{
+			cwd: cwd,
+			dirs: map[string]bool{
+				cwd: true,
+			},
+		},
+	})
+
+	if code == ExitOK {
+		t.Fatalf("expected non-zero exit code")
+	}
+	if !strings.Contains(stderr.String(), "terminal unavailable") {
+		t.Fatalf("expected confirmation failure, got %q", stderr.String())
+	}
+}
+
 type recordingScanner struct {
 	called         bool
 	selectedFolder string
@@ -245,6 +339,22 @@ func (s *recordingScanner) Scan(_ context.Context, selectedFolder string) (core.
 		return core.ScanResult{}, s.err
 	}
 	return s.result, nil
+}
+
+type recordingConfirmer struct {
+	called  bool
+	request ConfirmationRequest
+	outcome ConfirmationOutcome
+	err     error
+}
+
+func (c *recordingConfirmer) Confirm(_ context.Context, request ConfirmationRequest) (ConfirmationOutcome, error) {
+	c.called = true
+	c.request = request
+	if c.err != nil {
+		return ConfirmationCancelled, c.err
+	}
+	return c.outcome, nil
 }
 
 type fakeResolver struct {

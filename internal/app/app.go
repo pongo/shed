@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"runtime"
+	"time"
 
 	"shed/internal/core"
 )
@@ -15,12 +16,14 @@ const (
 )
 
 type Options struct {
-	Args     []string
-	GOOS     string
-	Stdout   io.Writer
-	Stderr   io.Writer
-	Resolver SelectedFolderResolver
-	Scanner  Scanner
+	Args      []string
+	GOOS      string
+	Stdout    io.Writer
+	Stderr    io.Writer
+	Resolver  SelectedFolderResolver
+	Scanner   Scanner
+	Confirmer Confirmer
+	Now       func() time.Time
 }
 
 type SelectedFolderResolver interface {
@@ -30,6 +33,24 @@ type SelectedFolderResolver interface {
 type Scanner interface {
 	Scan(ctx context.Context, selectedFolder string) (core.ScanResult, error)
 }
+
+type Confirmer interface {
+	Confirm(ctx context.Context, request ConfirmationRequest) (ConfirmationOutcome, error)
+}
+
+type ConfirmationRequest struct {
+	SelectedFolder       string
+	HeaderTitle          string
+	CompactArchiveBucket string
+	ScanResult           core.ScanResult
+}
+
+type ConfirmationOutcome int
+
+const (
+	ConfirmationCancelled ConfirmationOutcome = iota
+	ConfirmationConfirmed
+)
 
 type EmptyScanner struct{}
 
@@ -81,6 +102,21 @@ func Run(ctx context.Context, opts Options) int {
 		return ExitOK
 	}
 
+	outcome, err := opts.Confirmer.Confirm(ctx, ConfirmationRequest{
+		SelectedFolder:       selectedFolder,
+		HeaderTitle:          core.HeaderTitle(selectedFolder),
+		CompactArchiveBucket: core.CompactArchiveBucket(opts.Now(), selectedFolder),
+		ScanResult:           result,
+	})
+	if err != nil {
+		fmt.Fprintf(opts.Stderr, "confirmation failed: %v\n", err)
+		return ExitError
+	}
+	if outcome == ConfirmationCancelled {
+		fmt.Fprintln(opts.Stdout, "Cancelled")
+		return ExitOK
+	}
+
 	return ExitOK
 }
 
@@ -100,5 +136,17 @@ func withDefaults(opts Options) Options {
 	if opts.Resolver == nil {
 		opts.Resolver = missingResolver{}
 	}
+	if opts.Confirmer == nil {
+		opts.Confirmer = missingConfirmer{}
+	}
+	if opts.Now == nil {
+		opts.Now = time.Now
+	}
 	return opts
+}
+
+type missingConfirmer struct{}
+
+func (missingConfirmer) Confirm(context.Context, ConfirmationRequest) (ConfirmationOutcome, error) {
+	return ConfirmationCancelled, fmt.Errorf("confirmation TUI is not configured")
 }
