@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -65,6 +66,17 @@ func TestWindowResizeUpdatesListHeight(t *testing.T) {
 
 	if resized.ListHeight() != 17 {
 		t.Fatalf("expected list height 17, got %d", resized.ListHeight())
+	}
+}
+
+func TestMovingModelRendersSpinnerState(t *testing.T) {
+	model := newMovingModel(context.Background(), func(context.Context) (core.MoveSummary, error) {
+		return core.MoveSummary{}, nil
+	})
+
+	view := model.View().Content
+	if !strings.Contains(view, "Moving items into Archive") {
+		t.Fatalf("expected moving view, got %q", view)
 	}
 }
 

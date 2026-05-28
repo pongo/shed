@@ -247,6 +247,7 @@ func TestRunPassesPopulatedScanResultToConfirmer(t *testing.T) {
 		Stderr:    new(bytes.Buffer),
 		Scanner:   &recordingScanner{result: result},
 		Confirmer: confirmer,
+		Mover:     &recordingMover{summary: core.MoveSummary{ArchiveBucket: filepath.Join(cwd, "Shed", "2026", "05", filepath.Base(cwd))}},
 		Now:       func() time.Time { return moveDate },
 		Resolver: fakeResolver{
 			cwd: cwd,
@@ -296,6 +297,134 @@ func TestRunPrintsCancelledWhenConfirmerCancels(t *testing.T) {
 	}
 	if stdout.String() != "Cancelled\n" {
 		t.Fatalf("expected Cancelled output, got %q", stdout.String())
+	}
+}
+
+func TestRunMovesAfterConfirmationAndPrintsFinalSummary(t *testing.T) {
+	cwd := t.TempDir()
+	stdout := new(bytes.Buffer)
+	result := core.ScanResult{
+		StaleItems: []core.StaleItem{{DisplayName: "old.txt", Path: filepath.Join(cwd, "old.txt"), MoveSize: 10}},
+		MoveSize:   10,
+	}
+	bucket := filepath.Join(cwd, "Shed", "2026", "05", filepath.Base(cwd))
+	mover := &recordingMover{summary: core.MoveSummary{ArchiveBucket: bucket, MovedSize: 10}}
+
+	code := Run(context.Background(), Options{
+		GOOS:      "windows",
+		Stdout:    stdout,
+		Stderr:    new(bytes.Buffer),
+		Scanner:   &recordingScanner{result: result},
+		Confirmer: &recordingConfirmer{outcome: ConfirmationConfirmed},
+		Mover:     mover,
+		Resolver: fakeResolver{
+			cwd: cwd,
+			dirs: map[string]bool{
+				cwd: true,
+			},
+		},
+	})
+
+	if code != ExitOK {
+		t.Fatalf("expected exit code %d, got %d", ExitOK, code)
+	}
+	if !mover.called {
+		t.Fatalf("expected mover to be called")
+	}
+	output := stdout.String()
+	for _, want := range []string{"Moved: 10 B", "Archive: " + bucket} {
+		if !strings.Contains(output, want) {
+			t.Fatalf("expected output to contain %q, got %q", want, output)
+		}
+	}
+}
+
+func TestRunReportsFailedMovesAndExitsNonZero(t *testing.T) {
+	cwd := t.TempDir()
+	stdout := new(bytes.Buffer)
+	failedPath := filepath.Join(cwd, "locked.txt")
+
+	code := Run(context.Background(), Options{
+		GOOS:      "windows",
+		Stdout:    stdout,
+		Stderr:    new(bytes.Buffer),
+		Scanner:   &recordingScanner{result: core.ScanResult{StaleItems: []core.StaleItem{{DisplayName: "locked.txt", Path: failedPath}}}},
+		Confirmer: &recordingConfirmer{outcome: ConfirmationConfirmed},
+		Mover: &recordingMover{summary: core.MoveSummary{
+			ArchiveBucket: filepath.Join(cwd, "Shed"),
+			FailedPaths:   []string{failedPath},
+		}},
+		Resolver: fakeResolver{
+			cwd: cwd,
+			dirs: map[string]bool{
+				cwd: true,
+			},
+		},
+	})
+
+	if code == ExitOK {
+		t.Fatalf("expected non-zero exit code")
+	}
+	if !strings.Contains(stdout.String(), "Failed: "+failedPath) {
+		t.Fatalf("expected failed path in output, got %q", stdout.String())
+	}
+}
+
+func TestRunReportsPreflightFailureBeforeSummary(t *testing.T) {
+	cwd := t.TempDir()
+	stderr := new(bytes.Buffer)
+
+	code := Run(context.Background(), Options{
+		GOOS:      "windows",
+		Stdout:    new(bytes.Buffer),
+		Stderr:    stderr,
+		Scanner:   &recordingScanner{result: core.ScanResult{StaleItems: []core.StaleItem{{DisplayName: "old.txt"}}}},
+		Confirmer: &recordingConfirmer{outcome: ConfirmationConfirmed},
+		Mover:     &recordingMover{err: errors.New("selected folder unavailable")},
+		Resolver: fakeResolver{
+			cwd: cwd,
+			dirs: map[string]bool{
+				cwd: true,
+			},
+		},
+	})
+
+	if code == ExitOK {
+		t.Fatalf("expected non-zero exit code")
+	}
+	if !strings.Contains(stderr.String(), "preflight failed") {
+		t.Fatalf("expected preflight failure, got %q", stderr.String())
+	}
+}
+
+func TestRunPrintsSkippedPathsAfterConfirmedRun(t *testing.T) {
+	cwd := t.TempDir()
+	stdout := new(bytes.Buffer)
+	skippedPath := filepath.Join(cwd, "unreadable")
+
+	code := Run(context.Background(), Options{
+		GOOS:   "windows",
+		Stdout: stdout,
+		Stderr: new(bytes.Buffer),
+		Scanner: &recordingScanner{result: core.ScanResult{
+			StaleItems:   []core.StaleItem{{DisplayName: "old.txt"}},
+			SkippedItems: []core.SkippedItem{{Path: skippedPath}},
+		}},
+		Confirmer: &recordingConfirmer{outcome: ConfirmationConfirmed},
+		Mover:     &recordingMover{summary: core.MoveSummary{ArchiveBucket: filepath.Join(cwd, "Shed")}},
+		Resolver: fakeResolver{
+			cwd: cwd,
+			dirs: map[string]bool{
+				cwd: true,
+			},
+		},
+	})
+
+	if code != ExitOK {
+		t.Fatalf("expected exit code %d, got %d", ExitOK, code)
+	}
+	if !strings.Contains(stdout.String(), "Skipped: "+skippedPath) {
+		t.Fatalf("expected skipped path after run, got %q", stdout.String())
 	}
 }
 
@@ -355,6 +484,24 @@ func (c *recordingConfirmer) Confirm(_ context.Context, request ConfirmationRequ
 		return ConfirmationCancelled, c.err
 	}
 	return c.outcome, nil
+}
+
+type recordingMover struct {
+	called         bool
+	selectedFolder string
+	scan           core.ScanResult
+	summary        core.MoveSummary
+	err            error
+}
+
+func (m *recordingMover) Move(_ context.Context, selectedFolder string, scan core.ScanResult) (core.MoveSummary, error) {
+	m.called = true
+	m.selectedFolder = selectedFolder
+	m.scan = scan
+	if m.err != nil {
+		return core.MoveSummary{}, m.err
+	}
+	return m.summary, nil
 }
 
 type fakeResolver struct {

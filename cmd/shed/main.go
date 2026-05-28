@@ -23,7 +23,12 @@ func main() {
 		Stderr:   os.Stderr,
 		Resolver: shedfs.SelectedFolderResolver{},
 		Scanner:  shedfs.NewScanner(archiveRoot),
+		Mover:    shedfs.NewMover(archiveRoot),
 		Confirmer: tui.Confirmer{
+			Input:  os.Stdin,
+			Output: os.Stdout,
+		},
+		Moving: tui.MovingRunner{
 			Input:  os.Stdin,
 			Output: os.Stdout,
 		},

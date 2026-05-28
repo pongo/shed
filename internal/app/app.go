@@ -23,6 +23,8 @@ type Options struct {
 	Resolver  SelectedFolderResolver
 	Scanner   Scanner
 	Confirmer Confirmer
+	Mover     Mover
+	Moving    MovingRunner
 	Now       func() time.Time
 }
 
@@ -36,6 +38,16 @@ type Scanner interface {
 
 type Confirmer interface {
 	Confirm(ctx context.Context, request ConfirmationRequest) (ConfirmationOutcome, error)
+}
+
+type Mover interface {
+	Move(ctx context.Context, selectedFolder string, scan core.ScanResult) (core.MoveSummary, error)
+}
+
+type MoveFunc func(ctx context.Context) (core.MoveSummary, error)
+
+type MovingRunner interface {
+	RunMoving(ctx context.Context, move MoveFunc) (core.MoveSummary, error)
 }
 
 type ConfirmationRequest struct {
@@ -117,7 +129,30 @@ func Run(ctx context.Context, opts Options) int {
 		return ExitOK
 	}
 
+	summary, err := opts.Moving.RunMoving(ctx, func(ctx context.Context) (core.MoveSummary, error) {
+		return opts.Mover.Move(ctx, selectedFolder, result)
+	})
+	if err != nil {
+		fmt.Fprintf(opts.Stderr, "preflight failed: %v\n", err)
+		return ExitError
+	}
+
+	printMoveSummary(opts.Stdout, summary, result.SkippedItems)
+	if len(summary.FailedPaths) > 0 {
+		return ExitError
+	}
 	return ExitOK
+}
+
+func printMoveSummary(stdout io.Writer, summary core.MoveSummary, skippedItems []core.SkippedItem) {
+	fmt.Fprintf(stdout, "Moved: %s\n", core.FormatSize(summary.MovedSize))
+	fmt.Fprintf(stdout, "Archive: %s\n", summary.ArchiveBucket)
+	for _, failed := range summary.FailedPaths {
+		fmt.Fprintf(stdout, "Failed: %s\n", failed)
+	}
+	for _, skipped := range skippedItems {
+		fmt.Fprintf(stdout, "Skipped: %s\n", skipped.Path)
+	}
 }
 
 func withDefaults(opts Options) Options {
@@ -139,6 +174,12 @@ func withDefaults(opts Options) Options {
 	if opts.Confirmer == nil {
 		opts.Confirmer = missingConfirmer{}
 	}
+	if opts.Mover == nil {
+		opts.Mover = missingMover{}
+	}
+	if opts.Moving == nil {
+		opts.Moving = passthroughMovingRunner{}
+	}
 	if opts.Now == nil {
 		opts.Now = time.Now
 	}
@@ -149,4 +190,16 @@ type missingConfirmer struct{}
 
 func (missingConfirmer) Confirm(context.Context, ConfirmationRequest) (ConfirmationOutcome, error) {
 	return ConfirmationCancelled, fmt.Errorf("confirmation TUI is not configured")
+}
+
+type missingMover struct{}
+
+func (missingMover) Move(context.Context, string, core.ScanResult) (core.MoveSummary, error) {
+	return core.MoveSummary{}, fmt.Errorf("mover is not configured")
+}
+
+type passthroughMovingRunner struct{}
+
+func (passthroughMovingRunner) RunMoving(ctx context.Context, move MoveFunc) (core.MoveSummary, error) {
+	return move(ctx)
 }
