@@ -14,12 +14,12 @@ import (
 
 func TestModelConfirmsWithYAndEnter(t *testing.T) {
 	for _, msg := range []tea.KeyPressMsg{keyPress("y"), enterPress()} {
-		model := NewModel(testRequest())
+		model := newConfirmationModel(testRequest())
 
 		updated, _ := model.Update(msg)
-		result := updated.(Model).Result()
+		result := updated.(confirmationModel).Result()
 
-		if result != ResultConfirm {
+		if result != confirmationConfirmed {
 			t.Fatalf("expected confirm result, got %v", result)
 		}
 	}
@@ -27,19 +27,19 @@ func TestModelConfirmsWithYAndEnter(t *testing.T) {
 
 func TestModelCancelsWithConfiguredKeys(t *testing.T) {
 	for _, msg := range []tea.KeyPressMsg{keyPress("n"), keyPress("q"), escapePress(), ctrlCPress()} {
-		model := NewModel(testRequest())
+		model := newConfirmationModel(testRequest())
 
 		updated, _ := model.Update(msg)
-		result := updated.(Model).Result()
+		result := updated.(confirmationModel).Result()
 
-		if result != ResultCancel {
+		if result != confirmationCancelled {
 			t.Fatalf("expected cancel result for %q, got %v", msg.String(), result)
 		}
 	}
 }
 
 func TestViewRendersConfirmationText(t *testing.T) {
-	view := NewModel(testRequest()).View().Content
+	view := newConfirmationModel(testRequest()).View().Content
 
 	for _, want := range []string{"Downloads", "3 KB will be moved to " + filepath.Join("~", "Shed", "2026", "05", "Downloads"), "Press y/enter to confirm.", "Skipped items: 2.", "old-folder", "old-file.txt", "y/enter", "n/q/esc"} {
 		if !strings.Contains(view, want) {
@@ -56,7 +56,7 @@ func TestViewRendersConfirmationText(t *testing.T) {
 }
 
 func TestViewUsesDisplayNamesOnly(t *testing.T) {
-	view := NewModel(testRequest()).View().Content
+	view := newConfirmationModel(testRequest()).View().Content
 
 	for _, want := range []string{"  old-folder", "  old-file.txt"} {
 		if !strings.Contains(view, want) {
@@ -72,7 +72,7 @@ func TestViewUsesDisplayNamesOnly(t *testing.T) {
 }
 
 func TestListItemsRenderMuted(t *testing.T) {
-	view := NewModel(testRequest()).View().Content
+	view := newConfirmationModel(testRequest()).View().Content
 	want := listItemStyle.Render("  old-folder")
 
 	if !strings.Contains(view, want) {
@@ -81,10 +81,10 @@ func TestListItemsRenderMuted(t *testing.T) {
 }
 
 func TestWindowResizeUpdatesListHeight(t *testing.T) {
-	model := NewModel(testRequest())
+	model := newConfirmationModel(testRequest())
 
 	updated, _ := model.Update(tea.WindowSizeMsg{Width: 100, Height: 24})
-	resized := updated.(Model)
+	resized := updated.(confirmationModel)
 
 	if resized.ListHeight() != 19 {
 		t.Fatalf("expected list height 19, got %d", resized.ListHeight())

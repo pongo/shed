@@ -15,20 +15,20 @@ import (
 	"shed/internal/core"
 )
 
-type Result int
+type confirmationResult int
 
 const (
-	ResultNone Result = iota
-	ResultConfirm
-	ResultCancel
+	confirmationNone confirmationResult = iota
+	confirmationConfirmed
+	confirmationCancelled
 )
 
-type Model struct {
+type confirmationModel struct {
 	request app.ConfirmationRequest
 	list    list.Model
 	help    help.Model
 	keys    keyMap
-	result  Result
+	result  confirmationResult
 	width   int
 	height  int
 }
@@ -61,7 +61,7 @@ func defaultKeyMap() keyMap {
 	}
 }
 
-func NewModel(request app.ConfirmationRequest) Model {
+func newConfirmationModel(request app.ConfirmationRequest) confirmationModel {
 	items := make([]list.Item, len(request.ScanResult.StaleItems))
 	for i, item := range request.ScanResult.StaleItems {
 		items[i] = staleListItem(item.DisplayName)
@@ -75,7 +75,7 @@ func NewModel(request app.ConfirmationRequest) Model {
 	l.SetShowHelp(false)
 	l.SetStatusBarItemName("item", "items")
 
-	return Model{
+	return confirmationModel{
 		request: request,
 		list:    l,
 		help:    help.New(),
@@ -83,11 +83,11 @@ func NewModel(request app.ConfirmationRequest) Model {
 	}
 }
 
-func (m Model) Init() tea.Cmd {
+func (m confirmationModel) Init() tea.Cmd {
 	return nil
 }
 
-func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m confirmationModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -98,10 +98,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyPressMsg:
 		switch {
 		case key.Matches(msg, m.keys.Confirm):
-			m.result = ResultConfirm
+			m.result = confirmationConfirmed
 			return m, tea.Quit
 		case key.Matches(msg, m.keys.Cancel) || isCtrlC(msg):
-			m.result = ResultCancel
+			m.result = confirmationCancelled
 			return m, tea.Quit
 		}
 	}
@@ -116,7 +116,7 @@ func isCtrlC(msg tea.KeyPressMsg) bool {
 	return pressed.Mod&tea.ModCtrl != 0 && pressed.Code == 'c'
 }
 
-func (m Model) View() tea.View {
+func (m confirmationModel) View() tea.View {
 	var parts []string
 	parts = append(parts, headerView(m.request.HeaderTitle))
 	parts = append(parts, "")
@@ -127,11 +127,11 @@ func (m Model) View() tea.View {
 	return tea.NewView(strings.Join(parts, "\n"))
 }
 
-func (m Model) Result() Result {
+func (m confirmationModel) Result() confirmationResult {
 	return m.result
 }
 
-func (m Model) ListHeight() int {
+func (m confirmationModel) ListHeight() int {
 	return m.list.Height()
 }
 

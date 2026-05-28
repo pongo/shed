@@ -15,7 +15,7 @@ type Confirmer struct {
 }
 
 func (confirmer Confirmer) Confirm(ctx context.Context, request app.ConfirmationRequest) (app.ConfirmationOutcome, error) {
-	model := NewModel(request)
+	model := newConfirmationModel(request)
 	program := tea.NewProgram(
 		model,
 		tea.WithContext(ctx),
@@ -28,7 +28,7 @@ func (confirmer Confirmer) Confirm(ctx context.Context, request app.Confirmation
 		return app.ConfirmationCancelled, err
 	}
 
-	if resultModel, ok := finalModel.(Model); ok && resultModel.Result() == ResultConfirm {
+	if resultModel, ok := finalModel.(confirmationModel); ok && resultModel.Result() == confirmationConfirmed {
 		return app.ConfirmationConfirmed, nil
 	}
 	return app.ConfirmationCancelled, nil
