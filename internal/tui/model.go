@@ -52,7 +52,7 @@ func defaultKeyMap() keyMap {
 	return keyMap{
 		Confirm: key.NewBinding(
 			key.WithKeys("y", "enter"),
-			key.WithHelp("y/enter", "archive"),
+			key.WithHelp("y/enter", "confirm"),
 		),
 		Cancel: key.NewBinding(
 			key.WithKeys("n", "q", "esc", "ctrl+c"),
