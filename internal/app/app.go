@@ -22,9 +22,8 @@ type Options struct {
 	Stderr    io.Writer
 	Resolver  SelectedFolderResolver
 	Scanner   Scanner
-	Confirmer Confirmer
 	Mover     Mover
-	Moving    MovingRunner
+	Archiving ArchivingRunner
 	Now       func() time.Time
 }
 
@@ -36,18 +35,25 @@ type Scanner interface {
 	Scan(ctx context.Context, selectedFolder string) (core.ScanResult, error)
 }
 
-type Confirmer interface {
-	Confirm(ctx context.Context, request ConfirmationRequest) (ConfirmationOutcome, error)
-}
-
 type Mover interface {
 	Move(ctx context.Context, selectedFolder string, scan core.ScanResult) (core.MoveSummary, error)
 }
 
 type MoveFunc func(ctx context.Context) (core.MoveSummary, error)
 
-type MovingRunner interface {
-	RunMoving(ctx context.Context, move MoveFunc, view MoveViewData) (core.MoveSummary, error)
+type ArchivingRunner interface {
+	RunArchiving(ctx context.Context, request ArchivingRequest) (ArchivingResult, error)
+}
+
+type ArchivingRequest struct {
+	Confirmation ConfirmationRequest
+	Move         MoveFunc
+	View         MoveViewData
+}
+
+type ArchivingResult struct {
+	Outcome ArchivingOutcome
+	Summary core.MoveSummary
 }
 
 type MoveViewData struct {
@@ -61,11 +67,11 @@ type ConfirmationRequest struct {
 	ScanResult           core.ScanResult
 }
 
-type ConfirmationOutcome int
+type ArchivingOutcome int
 
 const (
-	ConfirmationCancelled ConfirmationOutcome = iota
-	ConfirmationConfirmed
+	ArchivingCancelled ArchivingOutcome = iota
+	ArchivingCompleted
 )
 
 type EmptyScanner struct{}
@@ -118,32 +124,35 @@ func Run(ctx context.Context, opts Options) int {
 		return ExitOK
 	}
 
-	outcome, err := opts.Confirmer.Confirm(ctx, ConfirmationRequest{
+	confirmation := ConfirmationRequest{
 		SelectedFolder:       selectedFolder,
 		HeaderTitle:          core.HeaderTitle(selectedFolder),
 		CompactArchiveBucket: core.CompactArchiveBucket(opts.Now(), selectedFolder),
 		ScanResult:           result,
+	}
+	archiving, err := opts.Archiving.RunArchiving(ctx, ArchivingRequest{
+		Confirmation: confirmation,
+		Move: func(ctx context.Context) (core.MoveSummary, error) {
+			return opts.Mover.Move(ctx, selectedFolder, result)
+		},
+		View: MoveViewData{
+			SkippedItems: result.SkippedItems,
+		},
 	})
 	if err != nil {
-		fmt.Fprintf(opts.Stderr, "Confirmation failed: %v\n", err)
+		if archiving.Outcome == ArchivingCompleted {
+			fmt.Fprintf(opts.Stderr, "Preflight failure: %v\n", err)
+			return ExitError
+		}
+		fmt.Fprintf(opts.Stderr, "Archiving failed: %v\n", err)
 		return ExitError
 	}
-	if outcome == ConfirmationCancelled {
+	if archiving.Outcome == ArchivingCancelled {
 		fmt.Fprintln(opts.Stdout, "Cancelled")
 		return ExitOK
 	}
 
-	summary, err := opts.Moving.RunMoving(ctx, func(ctx context.Context) (core.MoveSummary, error) {
-		return opts.Mover.Move(ctx, selectedFolder, result)
-	}, MoveViewData{
-		SkippedItems: result.SkippedItems,
-	})
-	if err != nil {
-		fmt.Fprintf(opts.Stderr, "Preflight failure: %v\n", err)
-		return ExitError
-	}
-
-	if len(summary.FailedPaths) > 0 {
+	if len(archiving.Summary.FailedPaths) > 0 {
 		return ExitError
 	}
 	return ExitOK
@@ -165,25 +174,16 @@ func withDefaults(opts Options) Options {
 	if opts.Resolver == nil {
 		opts.Resolver = missingResolver{}
 	}
-	if opts.Confirmer == nil {
-		opts.Confirmer = missingConfirmer{}
-	}
 	if opts.Mover == nil {
 		opts.Mover = missingMover{}
 	}
-	if opts.Moving == nil {
-		opts.Moving = passthroughMovingRunner{}
+	if opts.Archiving == nil {
+		opts.Archiving = passthroughArchivingRunner{}
 	}
 	if opts.Now == nil {
 		opts.Now = time.Now
 	}
 	return opts
-}
-
-type missingConfirmer struct{}
-
-func (missingConfirmer) Confirm(context.Context, ConfirmationRequest) (ConfirmationOutcome, error) {
-	return ConfirmationCancelled, fmt.Errorf("confirmation TUI is not configured")
 }
 
 type missingMover struct{}
@@ -192,8 +192,12 @@ func (missingMover) Move(context.Context, string, core.ScanResult) (core.MoveSum
 	return core.MoveSummary{}, fmt.Errorf("mover is not configured")
 }
 
-type passthroughMovingRunner struct{}
+type passthroughArchivingRunner struct{}
 
-func (passthroughMovingRunner) RunMoving(ctx context.Context, move MoveFunc, _ MoveViewData) (core.MoveSummary, error) {
-	return move(ctx)
+func (passthroughArchivingRunner) RunArchiving(ctx context.Context, request ArchivingRequest) (ArchivingResult, error) {
+	summary, err := request.Move(ctx)
+	return ArchivingResult{
+		Outcome: ArchivingCompleted,
+		Summary: summary,
+	}, err
 }

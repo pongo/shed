@@ -1,4 +1,4 @@
-package tui
+package archiving
 
 import (
 	"fmt"
@@ -99,10 +99,10 @@ func (m confirmationModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch {
 		case key.Matches(msg, m.keys.Confirm):
 			m.result = confirmationConfirmed
-			return m, tea.Quit
+			return m, nil
 		case key.Matches(msg, m.keys.Cancel) || isCtrlC(msg):
 			m.result = confirmationCancelled
-			return m, tea.Quit
+			return m, nil
 		}
 	}
 
@@ -117,10 +117,6 @@ func isCtrlC(msg tea.KeyPressMsg) bool {
 }
 
 func (m confirmationModel) View() tea.View {
-	if m.result != confirmationNone {
-		return tea.NewView("")
-	}
-
 	var parts []string
 	parts = append(parts, headerView(m.request.HeaderTitle))
 	parts = append(parts, "")

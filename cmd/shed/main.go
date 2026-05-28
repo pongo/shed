@@ -7,7 +7,7 @@ import (
 
 	"shed/internal/app"
 	shedfs "shed/internal/fs"
-	"shed/internal/tui"
+	"shed/internal/tui/archiving"
 )
 
 func main() {
@@ -32,11 +32,7 @@ func main() {
 		Resolver: shedfs.SelectedFolderResolver{},
 		Scanner:  shedfs.NewScanner(archiveRoot),
 		Mover:    shedfs.NewMover(archiveRoot),
-		Confirmer: tui.Confirmer{
-			Input:  os.Stdin,
-			Output: os.Stdout,
-		},
-		Moving: tui.MovingRunner{
+		Archiving: archiving.Runner{
 			Input:  os.Stdin,
 			Output: os.Stdout,
 		},

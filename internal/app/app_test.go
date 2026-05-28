@@ -232,10 +232,10 @@ func TestRunPrintsSkippedPathsWhenNothingCanMove(t *testing.T) {
 	}
 }
 
-func TestRunPassesPopulatedScanResultToConfirmer(t *testing.T) {
+func TestRunPassesPopulatedScanResultToArchivingRunner(t *testing.T) {
 	cwd := t.TempDir()
 	moveDate := time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)
-	confirmer := &recordingConfirmer{outcome: ConfirmationConfirmed}
+	archiving := &recordingArchivingRunner{outcome: ArchivingCompleted}
 	result := core.ScanResult{
 		StaleItems: []core.StaleItem{{DisplayName: "old.txt", Kind: core.FileItem, MoveSize: 10}},
 		MoveSize:   10,
@@ -246,7 +246,7 @@ func TestRunPassesPopulatedScanResultToConfirmer(t *testing.T) {
 		Stdout:    new(bytes.Buffer),
 		Stderr:    new(bytes.Buffer),
 		Scanner:   &recordingScanner{result: result},
-		Confirmer: confirmer,
+		Archiving: archiving,
 		Mover:     &recordingMover{summary: core.MoveSummary{ArchiveBucket: filepath.Join(cwd, "Shed", "2026", "05", filepath.Base(cwd))}},
 		Now:       func() time.Time { return moveDate },
 		Resolver: fakeResolver{
@@ -260,21 +260,21 @@ func TestRunPassesPopulatedScanResultToConfirmer(t *testing.T) {
 	if code != ExitOK {
 		t.Fatalf("expected exit code %d, got %d", ExitOK, code)
 	}
-	if !confirmer.called {
-		t.Fatalf("expected confirmer to be called")
+	if !archiving.called {
+		t.Fatalf("expected archiving runner to be called")
 	}
-	if confirmer.request.SelectedFolder != cwd {
-		t.Fatalf("expected selected folder %q, got %q", cwd, confirmer.request.SelectedFolder)
+	if archiving.request.Confirmation.SelectedFolder != cwd {
+		t.Fatalf("expected selected folder %q, got %q", cwd, archiving.request.Confirmation.SelectedFolder)
 	}
-	if confirmer.request.HeaderTitle != filepath.Base(cwd) {
-		t.Fatalf("expected header title %q, got %q", filepath.Base(cwd), confirmer.request.HeaderTitle)
+	if archiving.request.Confirmation.HeaderTitle != filepath.Base(cwd) {
+		t.Fatalf("expected header title %q, got %q", filepath.Base(cwd), archiving.request.Confirmation.HeaderTitle)
 	}
-	if !strings.Contains(confirmer.request.CompactArchiveBucket, filepath.Join("~", "Shed", "2026", "05")) {
-		t.Fatalf("expected compact archive bucket with move date, got %q", confirmer.request.CompactArchiveBucket)
+	if !strings.Contains(archiving.request.Confirmation.CompactArchiveBucket, filepath.Join("~", "Shed", "2026", "05")) {
+		t.Fatalf("expected compact archive bucket with move date, got %q", archiving.request.Confirmation.CompactArchiveBucket)
 	}
 }
 
-func TestRunPrintsCancelledWhenConfirmerCancels(t *testing.T) {
+func TestRunPrintsCancelledWhenArchivingRunnerCancels(t *testing.T) {
 	cwd := t.TempDir()
 	stdout := new(bytes.Buffer)
 
@@ -283,7 +283,7 @@ func TestRunPrintsCancelledWhenConfirmerCancels(t *testing.T) {
 		Stdout:    stdout,
 		Stderr:    new(bytes.Buffer),
 		Scanner:   &recordingScanner{result: core.ScanResult{StaleItems: []core.StaleItem{{DisplayName: "old.txt"}}}},
-		Confirmer: &recordingConfirmer{outcome: ConfirmationCancelled},
+		Archiving: &recordingArchivingRunner{outcome: ArchivingCancelled},
 		Resolver: fakeResolver{
 			cwd: cwd,
 			dirs: map[string]bool{
@@ -303,7 +303,7 @@ func TestRunPrintsCancelledWhenConfirmerCancels(t *testing.T) {
 func TestRunMovesAfterConfirmationAndPassesViewData(t *testing.T) {
 	cwd := t.TempDir()
 	stdout := new(bytes.Buffer)
-	moving := &recordingMovingRunner{}
+	archiving := &recordingArchivingRunner{outcome: ArchivingCompleted}
 	skippedPath := filepath.Join(cwd, "unreadable")
 	result := core.ScanResult{
 		StaleItems:   []core.StaleItem{{DisplayName: "old.txt", Path: filepath.Join(cwd, "old.txt"), MoveSize: 10}},
@@ -318,9 +318,8 @@ func TestRunMovesAfterConfirmationAndPassesViewData(t *testing.T) {
 		Stdout:    stdout,
 		Stderr:    new(bytes.Buffer),
 		Scanner:   &recordingScanner{result: result},
-		Confirmer: &recordingConfirmer{outcome: ConfirmationConfirmed},
 		Mover:     mover,
-		Moving:    moving,
+		Archiving: archiving,
 		Resolver: fakeResolver{
 			cwd: cwd,
 			dirs: map[string]bool{
@@ -335,14 +334,14 @@ func TestRunMovesAfterConfirmationAndPassesViewData(t *testing.T) {
 	if !mover.called {
 		t.Fatalf("expected mover to be called")
 	}
-	if !moving.called {
-		t.Fatalf("expected moving runner to be called")
+	if !archiving.called {
+		t.Fatalf("expected archiving runner to be called")
 	}
 	if stdout.String() != "" {
-		t.Fatalf("expected final move summary to be owned by moving runner, got stdout %q", stdout.String())
+		t.Fatalf("expected final move summary to be owned by archiving runner, got stdout %q", stdout.String())
 	}
-	if len(moving.view.SkippedItems) != 1 || moving.view.SkippedItems[0].Path != skippedPath {
-		t.Fatalf("expected skipped items to be passed to moving runner, got %#v", moving.view.SkippedItems)
+	if len(archiving.request.View.SkippedItems) != 1 || archiving.request.View.SkippedItems[0].Path != skippedPath {
+		t.Fatalf("expected skipped items to be passed to archiving runner, got %#v", archiving.request.View.SkippedItems)
 	}
 }
 
@@ -351,15 +350,15 @@ func TestRunReportsFailedMovesAndExitsNonZero(t *testing.T) {
 	failedPath := filepath.Join(cwd, "locked.txt")
 
 	code := Run(context.Background(), Options{
-		GOOS:      "windows",
-		Stdout:    new(bytes.Buffer),
-		Stderr:    new(bytes.Buffer),
-		Scanner:   &recordingScanner{result: core.ScanResult{StaleItems: []core.StaleItem{{DisplayName: "locked.txt", Path: failedPath}}}},
-		Confirmer: &recordingConfirmer{outcome: ConfirmationConfirmed},
+		GOOS:    "windows",
+		Stdout:  new(bytes.Buffer),
+		Stderr:  new(bytes.Buffer),
+		Scanner: &recordingScanner{result: core.ScanResult{StaleItems: []core.StaleItem{{DisplayName: "locked.txt", Path: failedPath}}}},
 		Mover: &recordingMover{summary: core.MoveSummary{
 			ArchiveBucket: filepath.Join(cwd, "Shed"),
 			FailedPaths:   []string{failedPath},
 		}},
+		Archiving: &recordingArchivingRunner{outcome: ArchivingCompleted},
 		Resolver: fakeResolver{
 			cwd: cwd,
 			dirs: map[string]bool{
@@ -382,8 +381,8 @@ func TestRunReportsPreflightFailureBeforeSummary(t *testing.T) {
 		Stdout:    new(bytes.Buffer),
 		Stderr:    stderr,
 		Scanner:   &recordingScanner{result: core.ScanResult{StaleItems: []core.StaleItem{{DisplayName: "old.txt"}}}},
-		Confirmer: &recordingConfirmer{outcome: ConfirmationConfirmed},
 		Mover:     &recordingMover{err: errors.New("selected folder unavailable")},
+		Archiving: &recordingArchivingRunner{outcome: ArchivingCompleted},
 		Resolver: fakeResolver{
 			cwd: cwd,
 			dirs: map[string]bool{
@@ -403,7 +402,7 @@ func TestRunReportsPreflightFailureBeforeSummary(t *testing.T) {
 func TestRunPassesSkippedPathsAfterConfirmedRun(t *testing.T) {
 	cwd := t.TempDir()
 	stdout := new(bytes.Buffer)
-	moving := &recordingMovingRunner{}
+	archiving := &recordingArchivingRunner{outcome: ArchivingCompleted}
 	skippedPath := filepath.Join(cwd, "unreadable")
 
 	code := Run(context.Background(), Options{
@@ -414,9 +413,8 @@ func TestRunPassesSkippedPathsAfterConfirmedRun(t *testing.T) {
 			StaleItems:   []core.StaleItem{{DisplayName: "old.txt"}},
 			SkippedItems: []core.SkippedItem{{Path: skippedPath}},
 		}},
-		Confirmer: &recordingConfirmer{outcome: ConfirmationConfirmed},
 		Mover:     &recordingMover{summary: core.MoveSummary{ArchiveBucket: filepath.Join(cwd, "Shed")}},
-		Moving:    moving,
+		Archiving: archiving,
 		Resolver: fakeResolver{
 			cwd: cwd,
 			dirs: map[string]bool{
@@ -429,14 +427,14 @@ func TestRunPassesSkippedPathsAfterConfirmedRun(t *testing.T) {
 		t.Fatalf("expected exit code %d, got %d", ExitOK, code)
 	}
 	if stdout.String() != "" {
-		t.Fatalf("expected final move summary to be owned by moving runner, got stdout %q", stdout.String())
+		t.Fatalf("expected final move summary to be owned by archiving runner, got stdout %q", stdout.String())
 	}
-	if len(moving.view.SkippedItems) != 1 || moving.view.SkippedItems[0].Path != skippedPath {
-		t.Fatalf("expected skipped item to be passed to moving runner, got %#v", moving.view.SkippedItems)
+	if len(archiving.request.View.SkippedItems) != 1 || archiving.request.View.SkippedItems[0].Path != skippedPath {
+		t.Fatalf("expected skipped item to be passed to archiving runner, got %#v", archiving.request.View.SkippedItems)
 	}
 }
 
-func TestRunReportsConfirmerFailure(t *testing.T) {
+func TestRunReportsArchivingRunnerFailure(t *testing.T) {
 	cwd := t.TempDir()
 	stderr := new(bytes.Buffer)
 
@@ -445,7 +443,7 @@ func TestRunReportsConfirmerFailure(t *testing.T) {
 		Stdout:    new(bytes.Buffer),
 		Stderr:    stderr,
 		Scanner:   &recordingScanner{result: core.ScanResult{StaleItems: []core.StaleItem{{DisplayName: "old.txt"}}}},
-		Confirmer: &recordingConfirmer{err: errors.New("terminal unavailable")},
+		Archiving: &recordingArchivingRunner{err: errors.New("terminal unavailable")},
 		Resolver: fakeResolver{
 			cwd: cwd,
 			dirs: map[string]bool{
@@ -478,22 +476,6 @@ func (s *recordingScanner) Scan(_ context.Context, selectedFolder string) (core.
 	return s.result, nil
 }
 
-type recordingConfirmer struct {
-	called  bool
-	request ConfirmationRequest
-	outcome ConfirmationOutcome
-	err     error
-}
-
-func (c *recordingConfirmer) Confirm(_ context.Context, request ConfirmationRequest) (ConfirmationOutcome, error) {
-	c.called = true
-	c.request = request
-	if c.err != nil {
-		return ConfirmationCancelled, c.err
-	}
-	return c.outcome, nil
-}
-
 type recordingMover struct {
 	called         bool
 	selectedFolder string
@@ -512,15 +494,27 @@ func (m *recordingMover) Move(_ context.Context, selectedFolder string, scan cor
 	return m.summary, nil
 }
 
-type recordingMovingRunner struct {
-	called bool
-	view   MoveViewData
+type recordingArchivingRunner struct {
+	called  bool
+	request ArchivingRequest
+	outcome ArchivingOutcome
+	err     error
 }
 
-func (runner *recordingMovingRunner) RunMoving(ctx context.Context, move MoveFunc, view MoveViewData) (core.MoveSummary, error) {
+func (runner *recordingArchivingRunner) RunArchiving(ctx context.Context, request ArchivingRequest) (ArchivingResult, error) {
 	runner.called = true
-	runner.view = view
-	return move(ctx)
+	runner.request = request
+	if runner.err != nil {
+		return ArchivingResult{}, runner.err
+	}
+	if runner.outcome == ArchivingCancelled {
+		return ArchivingResult{Outcome: ArchivingCancelled}, nil
+	}
+	summary, err := request.Move(ctx)
+	return ArchivingResult{
+		Outcome: ArchivingCompleted,
+		Summary: summary,
+	}, err
 }
 
 type fakeResolver struct {

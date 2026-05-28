@@ -20,6 +20,10 @@ _Avoid_: Self archive
 A folder inside the **Archive** for items moved from a selected folder name during a calendar month, shaped as `~\Shed\<yyyy>\<MM>\<source-folder-name>`.
 _Avoid_: Archive destination
 
+**Archive pruning**:
+The cleanup step that sends **Archive buckets** older than six months to the Recycle Bin.
+_Avoid_: Archive cleanup, pruning
+
 **Cancelled run**:
 A run where the user declined archiving from the TUI.
 _Avoid_: Closed run

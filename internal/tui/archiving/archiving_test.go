@@ -1,4 +1,4 @@
-package tui
+package archiving
 
 import (
 	"context"
@@ -38,6 +38,41 @@ func TestModelCancelsWithConfiguredKeys(t *testing.T) {
 	}
 }
 
+func TestArchivingModelTransitionsFromConfirmationToMoving(t *testing.T) {
+	initialModel := newModel(context.Background(), testArchivingRequest())
+
+	updated, _ := initialModel.Update(enterPress())
+	archiving := updated.(model)
+	view := archiving.View()
+
+	if archiving.phase != phaseMoving {
+		t.Fatalf("expected moving phase, got %v", archiving.phase)
+	}
+	if !strings.Contains(view.Content, "Moving items into Archive") {
+		t.Fatalf("expected moving view after confirmation, got %q", view.Content)
+	}
+	if view.Content == "" {
+		t.Fatalf("expected archiving transition not to render an empty clear view")
+	}
+}
+
+func TestArchivingModelRendersFinalSummaryAfterMove(t *testing.T) {
+	bucket := filepath.Join("C:", "Users", "pavel", "Shed")
+	initialModel := newModel(context.Background(), testArchivingRequest())
+	initialModel.phase = phaseMoving
+
+	updated, _ := initialModel.Update(moveFinishedMsg{summary: core.MoveSummary{MovedSize: 10, ArchiveBucket: bucket}})
+	archiving := updated.(model)
+	view := archiving.View().Content
+
+	if archiving.phase != phaseFinal {
+		t.Fatalf("expected final phase, got %v", archiving.phase)
+	}
+	if !strings.Contains(view, "10 B moved to "+bucket) {
+		t.Fatalf("expected final move summary, got %q", view)
+	}
+}
+
 func TestViewRendersConfirmationText(t *testing.T) {
 	view := newConfirmationModel(testRequest()).View().Content
 
@@ -60,22 +95,6 @@ func TestViewDoesNotUseAltScreen(t *testing.T) {
 
 	if view.AltScreen {
 		t.Fatalf("expected confirmation view to stay in the main screen buffer")
-	}
-}
-
-func TestViewClearsAfterConfirmationResult(t *testing.T) {
-	for _, msg := range []tea.KeyPressMsg{enterPress(), keyPress("n")} {
-		model := newConfirmationModel(testRequest())
-
-		updated, _ := model.Update(msg)
-		view := updated.(confirmationModel).View()
-
-		if view.Content != "" {
-			t.Fatalf("expected empty view after result, got:\n%s", view.Content)
-		}
-		if view.AltScreen {
-			t.Fatalf("expected cleared view to stay in the main screen buffer")
-		}
 	}
 }
 
@@ -126,17 +145,13 @@ func TestMovingModelRendersSpinnerState(t *testing.T) {
 	}
 }
 
-func TestMovingModelRendersFinalSummaryAfterMove(t *testing.T) {
-	bucket := filepath.Join("C:", "Users", "pavel", "Shed")
-	model := newMovingModel(context.Background(), func(context.Context) (core.MoveSummary, error) {
-		return core.MoveSummary{MovedSize: 10, ArchiveBucket: bucket}, nil
-	}, app.MoveViewData{})
-
-	updated, _ := model.Update(moveFinishedMsg{summary: core.MoveSummary{MovedSize: 10, ArchiveBucket: bucket}})
-	view := updated.(movingModel).View().Content
-
-	if !strings.Contains(view, "10 B moved to "+bucket) {
-		t.Fatalf("expected final move summary, got %q", view)
+func testArchivingRequest() app.ArchivingRequest {
+	return app.ArchivingRequest{
+		Confirmation: testRequest(),
+		Move: func(context.Context) (core.MoveSummary, error) {
+			return core.MoveSummary{}, nil
+		},
+		View: app.MoveViewData{},
 	}
 }
 
