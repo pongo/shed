@@ -2,6 +2,7 @@ package archiving
 
 import (
 	"context"
+	"fmt"
 	"io"
 
 	tea "charm.land/bubbletea/v2"
@@ -113,7 +114,8 @@ func (m model) updateMoving(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.summary = m.moving.summary
 		m.err = m.moving.err
 		if m.err != nil {
-			return m, tea.Quit
+			m.phase = phaseFinal
+			return m, tea.Sequence(tea.Println(fmt.Sprintf("Preflight failure: %v", m.err)), tea.Quit)
 		}
 		m.phase = phaseFinal
 		return m, tea.Sequence(tea.Println(formatFinalSummary(m.summary, m.request.View.SkippedItems)), tea.Quit)

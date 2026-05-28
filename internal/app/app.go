@@ -141,7 +141,6 @@ func Run(ctx context.Context, opts Options) int {
 	})
 	if err != nil {
 		if archiving.Outcome == ArchivingCompleted {
-			fmt.Fprintf(opts.Stderr, "Preflight failure: %v\n", err)
 			return ExitError
 		}
 		fmt.Fprintf(opts.Stderr, "Archiving failed: %v\n", err)

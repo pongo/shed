@@ -372,7 +372,7 @@ func TestRunReportsFailedMovesAndExitsNonZero(t *testing.T) {
 	}
 }
 
-func TestRunReportsPreflightFailureBeforeSummary(t *testing.T) {
+func TestRunLeavesPreflightFailureOutputToArchivingRunner(t *testing.T) {
 	cwd := t.TempDir()
 	stderr := new(bytes.Buffer)
 
@@ -394,8 +394,8 @@ func TestRunReportsPreflightFailureBeforeSummary(t *testing.T) {
 	if code == ExitOK {
 		t.Fatalf("expected non-zero exit code")
 	}
-	if !strings.Contains(stderr.String(), "Preflight failure") {
-		t.Fatalf("expected preflight failure, got %q", stderr.String())
+	if stderr.String() != "" {
+		t.Fatalf("expected preflight failure output to be owned by archiving runner, got %q", stderr.String())
 	}
 }
 

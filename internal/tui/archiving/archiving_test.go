@@ -3,6 +3,7 @@ package archiving
 import (
 	"bytes"
 	"context"
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -122,6 +123,33 @@ func TestRunnerRendersFinalSummaryOutputAfterMove(t *testing.T) {
 	}
 	if !strings.Contains(output.String(), "10 B moved to "+bucket) {
 		t.Fatalf("expected output to contain final summary, got %q", output.String())
+	}
+}
+
+func TestRunnerRendersPreflightFailureOutputAfterMoveError(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	output := new(bytes.Buffer)
+
+	result, err := (Runner{
+		Input:  strings.NewReader("\r"),
+		Output: output,
+	}).RunArchiving(ctx, app.ArchivingRequest{
+		Confirmation: testRequest(),
+		Move: func(context.Context) (core.MoveSummary, error) {
+			return core.MoveSummary{}, errors.New("selected folder unavailable")
+		},
+		View: app.MoveViewData{},
+	})
+
+	if err == nil {
+		t.Fatalf("expected move error")
+	}
+	if result.Outcome != app.ArchivingCompleted {
+		t.Fatalf("expected completed outcome for attempted archiving, got %v", result.Outcome)
+	}
+	if !strings.Contains(output.String(), "Preflight failure: selected folder unavailable") {
+		t.Fatalf("expected output to contain preflight failure, got %q", output.String())
 	}
 }
 
