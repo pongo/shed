@@ -337,7 +337,7 @@ func TestRunMovesAfterConfirmationAndPrintsFinalSummary(t *testing.T) {
 		t.Fatalf("expected moving runner to be called")
 	}
 	output := stdout.String()
-	for _, want := range []string{"Moved size: 10 B", "Archive bucket: " + bucket} {
+	for _, want := range []string{"10 B moved to " + bucket} {
 		if !strings.Contains(output, want) {
 			t.Fatalf("expected output to contain %q, got %q", want, output)
 		}

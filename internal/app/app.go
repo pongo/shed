@@ -145,8 +145,7 @@ func Run(ctx context.Context, opts Options) int {
 }
 
 func printMoveSummary(stdout io.Writer, summary core.MoveSummary, skippedItems []core.SkippedItem) {
-	fmt.Fprintf(stdout, "Moved size: %s\n", core.FormatSize(summary.MovedSize))
-	fmt.Fprintf(stdout, "Archive bucket: %s\n", summary.ArchiveBucket)
+	fmt.Fprintf(stdout, "%s moved to %s\n", core.FormatSize(summary.MovedSize), summary.ArchiveBucket)
 	for _, failed := range summary.FailedPaths {
 		fmt.Fprintf(stdout, "Failed move: %s\n", failed)
 	}
