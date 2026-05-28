@@ -33,6 +33,8 @@ type Model struct {
 	height  int
 }
 
+const listItemIndent = "  "
+
 type keyMap struct {
 	Confirm key.Binding
 	Cancel  key.Binding
@@ -179,5 +181,5 @@ func (displayNameDelegate) Update(tea.Msg, *list.Model) tea.Cmd {
 }
 
 func (displayNameDelegate) Render(w io.Writer, _ list.Model, _ int, item list.Item) {
-	fmt.Fprint(w, item.FilterValue())
+	fmt.Fprint(w, listItemIndent, item.FilterValue())
 }

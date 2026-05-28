@@ -50,13 +50,19 @@ func TestViewRendersConfirmationText(t *testing.T) {
 	if !strings.Contains(view, "\n\n3 KB will be moved") {
 		t.Fatalf("expected blank space after header, got:\n%s", view)
 	}
-	if !strings.Contains(view, "Skipped items: 2.\n\nold-folder") {
+	if !strings.Contains(view, "Skipped items: 2.\n\n  old-folder") {
 		t.Fatalf("expected blank space before list, got:\n%s", view)
 	}
 }
 
 func TestViewUsesDisplayNamesOnly(t *testing.T) {
 	view := NewModel(testRequest()).View().Content
+
+	for _, want := range []string{"  old-folder", "  old-file.txt"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("expected indented list item %q, got:\n%s", want, view)
+		}
+	}
 
 	for _, notWant := range []string{`C:\Users\pavel\Downloads\old-folder`, "2048", "old folder description"} {
 		if strings.Contains(view, notWant) {
