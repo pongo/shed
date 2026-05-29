@@ -5,37 +5,6 @@ import (
 	"time"
 )
 
-func TestParseArchiveMonthAcceptsStrictArchiveMonthShape(t *testing.T) {
-	month, ok := ParseArchiveMonth(`~\Shed\2025\11`)
-	if !ok {
-		t.Fatalf("expected valid archive month")
-	}
-	if month.Year != 2025 || month.Month != 11 {
-		t.Fatalf("expected 2025/11, got %d/%d", month.Year, month.Month)
-	}
-	if month.Path != `~\Shed\2025\11` {
-		t.Fatalf("expected original path, got %q", month.Path)
-	}
-}
-
-func TestParseArchiveMonthRejectsInvalidStructure(t *testing.T) {
-	paths := []string{
-		`~\Shed\2025`,
-		`~\Shed\25\11`,
-		`~\Shed\yyyy\11`,
-		`~\Shed\2025\00`,
-		`~\Shed\2025\13`,
-		`~\Other\2025\11`,
-		`C:\Users\pavel\Shed\2025\11`,
-	}
-
-	for _, path := range paths {
-		if _, ok := ParseArchiveMonth(path); ok {
-			t.Fatalf("expected invalid archive month path %q", path)
-		}
-	}
-}
-
 func TestIsPruneEligibleUsesStrictSixMonthCalendarCutoff(t *testing.T) {
 	now := time.Date(2026, 5, 29, 12, 0, 0, 0, time.UTC)
 

@@ -2,8 +2,6 @@ package core
 
 import (
 	"sort"
-	"strconv"
-	"strings"
 	"time"
 )
 
@@ -26,34 +24,6 @@ type PruneSummary struct {
 	PrunedSize  int64
 	PrunedPaths []string
 	FailedPaths []string
-}
-
-func ParseArchiveMonth(path string) (ArchiveMonth, bool) {
-	parts := splitPath(path)
-	if len(parts) != 4 {
-		return ArchiveMonth{}, false
-	}
-	if parts[0] != "~" || parts[1] != "Shed" {
-		return ArchiveMonth{}, false
-	}
-	if len(parts[2]) != 4 {
-		return ArchiveMonth{}, false
-	}
-
-	year, err := strconv.Atoi(parts[2])
-	if err != nil || year < 0 {
-		return ArchiveMonth{}, false
-	}
-	month, err := strconv.Atoi(parts[3])
-	if err != nil || month < 1 || month > 12 {
-		return ArchiveMonth{}, false
-	}
-
-	return ArchiveMonth{
-		Path:  path,
-		Year:  year,
-		Month: month,
-	}, true
 }
 
 func IsPruneEligible(month ArchiveMonth, now time.Time) bool {
@@ -97,18 +67,4 @@ func (summary *PruneSummary) RecordFailed(path string) {
 
 func monthKey(year, month int) int {
 	return year*100 + month
-}
-
-func splitPath(path string) []string {
-	parts := strings.FieldsFunc(path, func(r rune) bool {
-		return r == '\\' || r == '/'
-	})
-	filtered := make([]string, 0, len(parts))
-	for _, part := range parts {
-		if part == "" {
-			continue
-		}
-		filtered = append(filtered, part)
-	}
-	return filtered
 }
