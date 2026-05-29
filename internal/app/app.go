@@ -71,6 +71,25 @@ type PruningResult struct {
 	Summary core.PruneSummary
 }
 
+type FinalSummaryRequest struct {
+	Pruning   PruningFinalData
+	Archiving ArchivingFinalData
+}
+
+type PruningFinalData struct {
+	HadCandidates bool
+	Outcome       PruningOutcome
+	Summary       core.PruneSummary
+	Err           error
+}
+
+type ArchivingFinalData struct {
+	NothingToMove bool
+	Summary       core.MoveSummary
+	SkippedItems  []core.SkippedItem
+	Err           error
+}
+
 type MoveViewData struct {
 	SkippedItems []core.SkippedItem
 }
