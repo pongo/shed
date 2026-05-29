@@ -8,7 +8,10 @@ import (
 	"time"
 )
 
-const RetentionDays = 60
+const (
+	DefaultRetentionAgeDays = 60
+	RetentionDays           = DefaultRetentionAgeDays
+)
 
 type ItemKind int
 
@@ -48,7 +51,11 @@ type ScanResult struct {
 }
 
 func ScanRootItems(items []RootItem, now time.Time) ScanResult {
-	boundary := now.AddDate(0, 0, -RetentionDays)
+	return ScanRootItemsWithRetentionAge(items, now, DefaultRetentionAgeDays)
+}
+
+func ScanRootItemsWithRetentionAge(items []RootItem, now time.Time, retentionAgeDays int) ScanResult {
+	boundary := now.AddDate(0, 0, -retentionAgeDays)
 	result := ScanResult{}
 
 	for _, item := range items {
@@ -59,7 +66,7 @@ func ScanRootItems(items []RootItem, now time.Time) ScanResult {
 			result.SkippedItems = append(result.SkippedItems, SkippedItem{Path: item.Path, Err: item.SizeErr})
 			continue
 		}
-		if !Stale(item, boundary) {
+		if retentionAgeDays > 0 && !Stale(item, boundary) {
 			continue
 		}
 

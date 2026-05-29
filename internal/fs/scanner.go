@@ -12,8 +12,9 @@ import (
 )
 
 type Scanner struct {
-	ShedRoot string
-	Now      func() time.Time
+	ShedRoot         string
+	RetentionAgeDays *int
+	Now              func() time.Time
 }
 
 func NewScanner(shedRoot string) Scanner {
@@ -56,7 +57,12 @@ func (scanner Scanner) Scan(ctx context.Context, selectedFolder string) (core.Sc
 		items = append(items, item)
 	}
 
-	return core.ScanRootItems(items, scanner.Now()), nil
+	retentionAgeDays := core.DefaultRetentionAgeDays
+	if scanner.RetentionAgeDays != nil {
+		retentionAgeDays = *scanner.RetentionAgeDays
+	}
+
+	return core.ScanRootItemsWithRetentionAge(items, scanner.Now(), retentionAgeDays), nil
 }
 
 func (scanner Scanner) rootItem(path, name string) (core.RootItem, error) {

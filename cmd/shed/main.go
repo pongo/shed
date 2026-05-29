@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 
 	"shed/internal/app"
+	"shed/internal/core"
 	shedfs "shed/internal/fs"
 	"shed/internal/tui/final"
 	"shed/internal/tui/pruning"
@@ -39,8 +41,10 @@ func run(
 		return app.ExitError
 	}
 
-	if len(args) > 1 {
-		_, _ = fmt.Fprintln(stderr, "Usage: shed [folder]")
+	cli, err := parseCLI(args)
+	if err != nil {
+		_, _ = fmt.Fprintln(stderr, err)
+		printUsage(stderr)
 		return app.ExitError
 	}
 
@@ -51,7 +55,7 @@ func run(
 	}
 
 	return app.Run(ctx, app.Options{
-		Args:     args,
+		Args:     cli.args,
 		Stdout:   stdout,
 		Stderr:   stderr,
 		Resolver: shedfs.SelectedFolderResolver{},
@@ -60,8 +64,11 @@ func run(
 			Input:  stdin,
 			Output: stdout,
 		},
-		Scanner: shedfs.NewScanner(shedRoot),
-		Mover:   shedfs.NewMover(shedRoot),
+		Scanner: shedfs.Scanner{
+			ShedRoot:         shedRoot,
+			RetentionAgeDays: &cli.retentionAgeDays,
+		},
+		Mover: shedfs.NewMover(shedRoot),
 		Shedding: shedding.Runner{
 			Input:  stdin,
 			Output: stdout,
@@ -70,4 +77,48 @@ func run(
 			Output: stdout,
 		},
 	})
+}
+
+type cliOptions struct {
+	args             []string
+	retentionAgeDays int
+}
+
+// parseCLI accepts --age before or after the folder, unlike Go's flag package.
+func parseCLI(args []string) (cliOptions, error) {
+	options := cliOptions{
+		retentionAgeDays: core.DefaultRetentionAgeDays,
+	}
+
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if arg != "--age" {
+			options.args = append(options.args, arg)
+			continue
+		}
+
+		if i+1 >= len(args) {
+			return cliOptions{}, fmt.Errorf("invalid age: missing value")
+		}
+		i++
+
+		age, err := strconv.Atoi(args[i])
+		if err != nil {
+			return cliOptions{}, fmt.Errorf("invalid age: must be a whole number")
+		}
+		if age < 0 {
+			return cliOptions{}, fmt.Errorf("invalid age: must be greater than or equal to 0")
+		}
+		options.retentionAgeDays = age
+	}
+
+	if len(options.args) > 1 {
+		return cliOptions{}, fmt.Errorf("too many arguments")
+	}
+
+	return options, nil
+}
+
+func printUsage(stderr io.Writer) {
+	_, _ = fmt.Fprintf(stderr, "Usage: shed [--age days=%d] [folder]\n", core.DefaultRetentionAgeDays)
 }

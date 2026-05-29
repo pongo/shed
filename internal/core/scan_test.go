@@ -28,6 +28,38 @@ func TestScanRootItemsUsesRetentionBoundaryByKind(t *testing.T) {
 	}
 }
 
+func TestScanRootItemsUsesCustomRetentionAge(t *testing.T) {
+	now := time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)
+	thirtyDaysOld := now.AddDate(0, 0, -30)
+
+	result := ScanRootItemsWithRetentionAge([]RootItem{
+		{Name: "custom-age.txt", Path: `C:\Work\custom-age.txt`, Kind: FileItem, Modified: thirtyDaysOld, Size: 10},
+	}, now, 30)
+
+	names := staleNames(result.StaleItems)
+	want := []string{"custom-age.txt"}
+	if !equalStrings(names, want) {
+		t.Fatalf("expected stale names %v, got %v", want, names)
+	}
+}
+
+func TestScanRootItemsTreatsAgeZeroAsAllEligibleItems(t *testing.T) {
+	now := time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)
+	future := now.AddDate(0, 0, 1)
+
+	result := ScanRootItemsWithRetentionAge([]RootItem{
+		{Name: "future-file.txt", Path: `C:\Work\future-file.txt`, Kind: FileItem, Modified: future, Size: 10},
+		{Name: "future-folder", Path: `C:\Work\future-folder`, Kind: FolderItem, Created: future, Size: 20},
+		{Name: "hidden.txt", Path: `C:\Work\hidden.txt`, Kind: FileItem, Modified: future, Hidden: true, Size: 30},
+	}, now, 0)
+
+	names := staleNames(result.StaleItems)
+	want := []string{"future-folder", "future-file.txt"}
+	if !equalStrings(names, want) {
+		t.Fatalf("expected stale names %v, got %v", want, names)
+	}
+}
+
 func TestScanRootItemsAppliesEligibilityRules(t *testing.T) {
 	now := time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)
 	old := now.AddDate(0, 0, -RetentionDays)
