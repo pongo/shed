@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"runtime"
 	"time"
 
 	"shed/internal/core"
@@ -17,7 +16,6 @@ const (
 
 type Options struct {
 	Args      []string
-	GOOS      string
 	Stdout    io.Writer
 	Stderr    io.Writer
 	Resolver  SelectedFolderResolver
@@ -142,16 +140,6 @@ func (missingResolver) Resolve(string) (string, error) {
 func Run(ctx context.Context, opts Options) int {
 	opts = withDefaults(opts)
 
-	if opts.GOOS != "windows" {
-		fmt.Fprintln(opts.Stderr, "Unsupported platform")
-		return ExitError
-	}
-
-	if len(opts.Args) > 1 {
-		fmt.Fprintln(opts.Stderr, "Usage: shed [folder]")
-		return ExitError
-	}
-
 	arg := ""
 	if len(opts.Args) == 1 {
 		arg = opts.Args[0]
@@ -270,9 +258,6 @@ func shouldExitError(pruning PruningFinalData, archiving ArchivingFinalData) boo
 }
 
 func withDefaults(opts Options) Options {
-	if opts.GOOS == "" {
-		opts.GOOS = runtime.GOOS
-	}
 	if opts.Stdout == nil {
 		opts.Stdout = io.Discard
 	}

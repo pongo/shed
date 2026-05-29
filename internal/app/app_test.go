@@ -11,28 +11,11 @@ import (
 	"shed/internal/core"
 )
 
-func TestRunValidatesBeforePruning(t *testing.T) {
+func TestRunResolvesSelectedFolderBeforePruning(t *testing.T) {
 	pruner := &recordingPruner{}
 	stderr := new(bytes.Buffer)
 
-	code := Run(context.Background(), Options{GOOS: "linux", Stderr: stderr, Pruner: pruner})
-	if code != ExitError {
-		t.Fatalf("expected ExitError, got %d", code)
-	}
-	if pruner.scanCalled {
-		t.Fatalf("expected no pruning before platform validation")
-	}
-
-	code = Run(context.Background(), Options{GOOS: "windows", Args: []string{"a", "b"}, Stderr: stderr, Pruner: pruner})
-	if code != ExitError {
-		t.Fatalf("expected ExitError, got %d", code)
-	}
-	if pruner.scanCalled {
-		t.Fatalf("expected no pruning before usage validation")
-	}
-
-	code = Run(context.Background(), Options{
-		GOOS:   "windows",
+	code := Run(context.Background(), Options{
 		Stderr: stderr,
 		Pruner: pruner,
 		Resolver: fakeResolver{
@@ -44,6 +27,9 @@ func TestRunValidatesBeforePruning(t *testing.T) {
 	}
 	if pruner.scanCalled {
 		t.Fatalf("expected no pruning before selected folder resolve")
+	}
+	if !strings.Contains(stderr.String(), "Invalid selected folder: bad folder") {
+		t.Fatalf("expected selected folder error, got %q", stderr.String())
 	}
 }
 
@@ -310,7 +296,6 @@ func withStdout(stdout *bytes.Buffer) optionMutator {
 
 func baseOptions(cwd string, pruner Pruner, scanner Scanner, archiving ArchivingRunner, final FinalRunner, mutators ...optionMutator) Options {
 	opts := Options{
-		GOOS:      "windows",
 		Stdout:    new(bytes.Buffer),
 		Stderr:    new(bytes.Buffer),
 		Resolver:  fakeResolver{cwd: cwd},
