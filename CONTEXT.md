@@ -33,7 +33,7 @@ A file, folder, or symlink that has been moved into an **Archive bucket**.
 _Avoid_: Moved file, cleaned item
 
 **Failed move**:
-An attempted move that did not complete after the user confirmed archiving. Failed moves do not roll back successful moves.
+An attempted move that did not complete after the user confirmed archiving. For a partial **Merge**, the Failed move path is the specific nested item path that failed, not the top-level **Stale item** folder. Failed moves do not roll back successful moves.
 _Avoid_: Transaction failure
 
 **Move size**:
@@ -41,11 +41,11 @@ The total byte size that stale items will remove from the selected folder. It in
 _Avoid_: Archive growth, disk growth
 
 **Move summary**:
-The final report after archiving completes, containing the actual size successfully moved, the **Archive bucket** path, and any **Failed move** paths.
+The final report after archiving completes, containing the actual size successfully moved, the **Archive bucket** path, and any **Failed move** paths. A successful folder rename may add that folder's full **Move size** at once; a partial **Merge** adds only the sizes of nested items that moved successfully.
 _Avoid_: Move log
 
 **Move order**:
-The deterministic order for displaying and moving stale items: folders alphabetically first, then files and symlinks alphabetically.
+The deterministic order for displaying stale items in the TUI: folders alphabetically first, then files and symlinks alphabetically. shed may move stale items in any order after confirmation.
 _Avoid_: Scan order
 
 **Display name**:
@@ -69,7 +69,7 @@ The conflict resolution for files and symlinks with the same name, inserted befo
 _Avoid_: Rename suffix, duplicate suffix
 
 **Preflight failure**:
-A run-level failure detected after confirmation but before moving any items.
+A run-level failure detected after confirmation while preparing the **Selected folder**, **Archive**, or **Archive bucket**, before the first attempted move. Errors after the first attempted move are reported as **Failed move** paths.
 _Avoid_: Setup error
 
 **Unsupported platform**:

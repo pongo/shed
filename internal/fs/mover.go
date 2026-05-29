@@ -34,18 +34,13 @@ func (mover Mover) Move(ctx context.Context, selectedFolder string, scan core.Sc
 		return core.MoveSummary{ArchiveBucket: bucket}, err
 	}
 
-	summary := core.MoveSummary{ArchiveBucket: bucket}
+	summary := core.NewMoveSummary(bucket)
 	for _, item := range scan.StaleItems {
 		if err := ctx.Err(); err != nil {
 			return summary, err
 		}
 
-		movedSize, err := moveRootItem(item, bucket)
-		summary.MovedSize += movedSize
-		if err != nil {
-			summary.FailedPaths = append(summary.FailedPaths, item.Path)
-			continue
-		}
+		moveRootItem(item, bucket, &summary)
 	}
 
 	return summary, nil
@@ -92,101 +87,105 @@ func ensureDirectory(path, label string) error {
 	return nil
 }
 
-func moveRootItem(item core.StaleItem, bucket string) (int64, error) {
-	if item.Kind == core.FolderItem {
-		target := filepath.Join(bucket, item.DisplayName)
-		targetInfo, err := os.Stat(target)
-		if err == nil && targetInfo.IsDir() {
-			return mergeFolder(item.Path, target)
-		}
-		if err != nil && !os.IsNotExist(err) {
-			return 0, err
-		}
+func moveRootItem(item core.StaleItem, bucket string, summary *core.MoveSummary) {
+	decision := core.DecideArchiveMove(core.ArchiveMoveCandidate{
+		Name: item.DisplayName,
+		Kind: item.Kind,
+	}, archiveEntries(bucket))
+	target := filepath.Join(bucket, decision.TargetName)
+	if decision.Action == core.MergeIntoExistingFolder {
+		mergeFolder(item.Path, target, summary)
+		return
 	}
 
-	target := filepath.Join(bucket, resolveTargetName(bucket, item.DisplayName))
 	if err := os.Rename(item.Path, target); err != nil {
-		return 0, err
+		summary.RecordFailed(item.Path)
+		return
 	}
-	return item.MoveSize, nil
+	summary.RecordMoved(item.MoveSize)
 }
 
-func mergeFolder(source, target string) (int64, error) {
+func mergeFolder(source, target string, summary *core.MoveSummary) {
 	entries, err := os.ReadDir(source)
 	if err != nil {
-		return 0, err
+		summary.RecordFailed(source)
+		return
 	}
 	sortDirEntries(entries)
 
-	var movedSize int64
-	var failed []string
 	for _, entry := range entries {
 		sourcePath := filepath.Join(source, entry.Name())
 
 		info, err := os.Lstat(sourcePath)
 		if err != nil {
-			failed = append(failed, sourcePath)
+			summary.RecordFailed(sourcePath)
 			continue
 		}
 
-		if info.IsDir() && info.Mode()&os.ModeSymlink == 0 {
-			targetPath := filepath.Join(target, entry.Name())
-			targetInfo, err := os.Stat(targetPath)
-			if err == nil && targetInfo.IsDir() {
-				size, mergeErr := mergeFolder(sourcePath, targetPath)
-				movedSize += size
-				if mergeErr != nil {
-					failed = append(failed, sourcePath)
-				}
-				continue
-			}
-			if err != nil && !os.IsNotExist(err) {
-				failed = append(failed, sourcePath)
-				continue
-			}
-			targetPath = filepath.Join(target, resolveTargetName(target, entry.Name()))
+		kind := core.FileItem
+		if info.Mode()&os.ModeSymlink != 0 {
+			kind = core.SymlinkItem
+		} else if info.IsDir() {
+			kind = core.FolderItem
+		}
+		decision := core.DecideArchiveMove(core.ArchiveMoveCandidate{
+			Name: entry.Name(),
+			Kind: kind,
+		}, archiveEntries(target))
+		targetPath := filepath.Join(target, decision.TargetName)
+
+		if decision.Action == core.MergeIntoExistingFolder {
+			mergeFolder(sourcePath, targetPath, summary)
+			continue
+		}
+
+		if kind == core.FolderItem {
 			size, sizeErr := RecursiveSize(sourcePath)
 			if sizeErr != nil {
-				failed = append(failed, sourcePath)
+				summary.RecordFailed(sourcePath)
 				continue
 			}
 			if err := os.Rename(sourcePath, targetPath); err != nil {
-				failed = append(failed, sourcePath)
+				summary.RecordFailed(sourcePath)
 				continue
 			}
-			movedSize += size
+			summary.RecordMoved(size)
 			continue
 		}
 
-		targetPath := filepath.Join(target, resolveTargetName(target, entry.Name()))
 		size := int64(0)
-		if info.Mode()&os.ModeSymlink == 0 {
+		if kind != core.SymlinkItem {
 			size = info.Size()
 		}
 		if err := os.Rename(sourcePath, targetPath); err != nil {
-			failed = append(failed, sourcePath)
+			summary.RecordFailed(sourcePath)
 			continue
 		}
-		movedSize += size
+		summary.RecordMoved(size)
 	}
 
 	_ = os.Remove(source)
-	if len(failed) > 0 {
-		return movedSize, fmt.Errorf("failed to move: %s", strings.Join(failed, ", "))
-	}
-	return movedSize, nil
 }
 
-func resolveTargetName(dir, name string) string {
+func archiveEntries(dir string) []core.ArchiveMoveEntry {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return name
+		return nil
 	}
-	names := make([]string, len(entries))
-	for i, entry := range entries {
-		names[i] = entry.Name()
+	moveEntries := make([]core.ArchiveMoveEntry, 0, len(entries))
+	for _, entry := range entries {
+		kind := core.FileItem
+		if entry.Type()&os.ModeSymlink != 0 {
+			kind = core.SymlinkItem
+		} else if entry.IsDir() {
+			kind = core.FolderItem
+		}
+		moveEntries = append(moveEntries, core.ArchiveMoveEntry{
+			Name: entry.Name(),
+			Kind: kind,
+		})
 	}
-	return core.ResolveNumberedName(names, name)
+	return moveEntries
 }
 
 func sortDirEntries(entries []os.DirEntry) {

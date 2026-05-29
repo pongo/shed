@@ -6,6 +6,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"syscall"
 	"testing"
 	"time"
 
@@ -143,6 +144,37 @@ func TestMoverMergesFolderConflictsRecursively(t *testing.T) {
 	}
 }
 
+func TestMoverReportsSpecificNestedFailedMoveInPartialMerge(t *testing.T) {
+	now := time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)
+	root := t.TempDir()
+	selected := filepath.Join(root, "Downloads")
+	archive := filepath.Join(root, "Shed")
+	bucket := filepath.Join(archive, "2026", "05", "Downloads")
+	if err := os.MkdirAll(filepath.Join(bucket, "project", "nested"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(selected, "project", "nested"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	locked := filepath.Join(selected, "project", "nested", "locked.txt")
+	writeFile(t, locked, "locked")
+	lockFileNoDelete(t, locked)
+
+	summary, err := Mover{ArchiveRoot: archive, Now: func() time.Time { return now }}.Move(context.Background(), selected, core.ScanResult{
+		StaleItems: []core.StaleItem{{DisplayName: "project", Path: filepath.Join(selected, "project"), Kind: core.FolderItem, MoveSize: 6}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(summary.FailedPaths) != 1 {
+		t.Fatalf("expected one failed path, got %v", summary.FailedPaths)
+	}
+	if summary.FailedPaths[0] != locked {
+		t.Fatalf("expected nested failed path %q, got %q", locked, summary.FailedPaths[0])
+	}
+}
+
 func TestMoverPreflightFailsWhenArchiveBucketIsFile(t *testing.T) {
 	now := time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)
 	root := t.TempDir()
@@ -181,4 +213,21 @@ func TestMoverPreflightFailsWhenSelectedFolderIsMissing(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected preflight error")
 	}
+}
+
+func lockFileNoDelete(t *testing.T, path string) {
+	t.Helper()
+	pointer, err := syscall.UTF16PtrFromString(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	handle, err := syscall.CreateFile(pointer, syscall.GENERIC_READ, syscall.FILE_SHARE_READ, nil, syscall.OPEN_EXISTING, syscall.FILE_ATTRIBUTE_NORMAL, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := syscall.CloseHandle(handle); err != nil {
+			t.Fatal(err)
+		}
+	})
 }
