@@ -8,6 +8,8 @@ import (
 	"shed/internal/app"
 	shedfs "shed/internal/fs"
 	"shed/internal/tui/archiving"
+	"shed/internal/tui/final"
+	"shed/internal/tui/pruning"
 )
 
 func main() {
@@ -30,10 +32,18 @@ func main() {
 		Stdout:   os.Stdout,
 		Stderr:   os.Stderr,
 		Resolver: shedfs.SelectedFolderResolver{},
-		Scanner:  shedfs.NewScanner(archiveRoot),
-		Mover:    shedfs.NewMover(archiveRoot),
+		Pruner:   shedfs.NewPruner(archiveRoot),
+		Pruning: pruning.Runner{
+			Input:  os.Stdin,
+			Output: os.Stdout,
+		},
+		Scanner: shedfs.NewScanner(archiveRoot),
+		Mover:   shedfs.NewMover(archiveRoot),
 		Archiving: archiving.Runner{
 			Input:  os.Stdin,
+			Output: os.Stdout,
+		},
+		Final: final.Runner{
 			Output: os.Stdout,
 		},
 	})

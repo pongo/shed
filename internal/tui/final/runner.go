@@ -76,6 +76,10 @@ func shouldRenderPruning(pruning app.PruningFinalData) bool {
 }
 
 func renderArchivingSection(archiving app.ArchivingFinalData) (string, bool) {
+	if !archiving.Show && !archiving.NothingToMove && archiving.Err == nil && archiving.Summary.ArchiveBucket == "" && archiving.Summary.MovedSize == 0 && len(archiving.Summary.FailedPaths) == 0 && len(archiving.SkippedItems) == 0 {
+		return "", false
+	}
+
 	lines := []string{"Archiving"}
 
 	if archiving.NothingToMove {

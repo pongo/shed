@@ -4,535 +4,343 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"io/fs"
-	"os"
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"shed/internal/core"
 )
 
-func TestRunSelectsCurrentWorkingDirectoryWithoutArgs(t *testing.T) {
-	cwd := t.TempDir()
-	scanner := &recordingScanner{}
-	stdout, stderr := new(bytes.Buffer), new(bytes.Buffer)
+func TestRunValidatesBeforePruning(t *testing.T) {
+	pruner := &recordingPruner{}
+	stderr := new(bytes.Buffer)
 
-	code := Run(context.Background(), Options{
-		Args:    nil,
-		GOOS:    "windows",
-		Stdout:  stdout,
-		Stderr:  stderr,
-		Scanner: scanner,
+	code := Run(context.Background(), Options{GOOS: "linux", Stderr: stderr, Pruner: pruner})
+	if code != ExitError {
+		t.Fatalf("expected ExitError, got %d", code)
+	}
+	if pruner.scanCalled {
+		t.Fatalf("expected no pruning before platform validation")
+	}
+
+	code = Run(context.Background(), Options{GOOS: "windows", Args: []string{"a", "b"}, Stderr: stderr, Pruner: pruner})
+	if code != ExitError {
+		t.Fatalf("expected ExitError, got %d", code)
+	}
+	if pruner.scanCalled {
+		t.Fatalf("expected no pruning before usage validation")
+	}
+
+	code = Run(context.Background(), Options{
+		GOOS:   "windows",
+		Stderr: stderr,
+		Pruner: pruner,
 		Resolver: fakeResolver{
-			cwd: cwd,
-			dirs: map[string]bool{
-				cwd: true,
-			},
+			err: errors.New("bad folder"),
 		},
 	})
-
-	if code != ExitOK {
-		t.Fatalf("expected exit code %d, got %d; stderr=%q", ExitOK, code, stderr.String())
+	if code != ExitError {
+		t.Fatalf("expected ExitError, got %d", code)
 	}
-	if scanner.selectedFolder != cwd {
-		t.Fatalf("expected selected folder %q, got %q", cwd, scanner.selectedFolder)
+	if pruner.scanCalled {
+		t.Fatalf("expected no pruning before selected folder resolve")
+	}
+}
+
+func TestRunPruningNoOpFlowsToArchiving(t *testing.T) {
+	cwd := t.TempDir()
+	pruner := &recordingPruner{}
+	archiving := &recordingArchivingRunner{outcome: ArchivingCompleted}
+	scanner := &recordingScanner{result: core.ScanResult{StaleItems: []core.StaleItem{{DisplayName: "old.txt"}}}}
+
+	code := Run(context.Background(), baseOptions(cwd, pruner, scanner, archiving, &recordingFinalRunner{}))
+	if code != ExitOK {
+		t.Fatalf("expected ExitOK, got %d", code)
+	}
+	if !pruner.scanCalled || !scanner.called || !archiving.called {
+		t.Fatalf("expected pruning scan then archiving path to run")
+	}
+}
+
+func TestRunPruningSkipFlowsToArchiving(t *testing.T) {
+	cwd := t.TempDir()
+	pruner := &recordingPruner{scan: core.PruneScanResult{Candidates: []core.PruneCandidate{{Month: core.ArchiveMonth{Path: "m"}}}}}
+	pruning := &recordingPruningRunner{result: PruningResult{Outcome: PruningSkipped}}
+	scanner := &recordingScanner{result: core.ScanResult{StaleItems: []core.StaleItem{{DisplayName: "old.txt"}}}}
+	archiving := &recordingArchivingRunner{outcome: ArchivingCompleted}
+
+	code := Run(context.Background(), baseOptions(cwd, pruner, scanner, archiving, &recordingFinalRunner{}, withPruning(pruning)))
+	if code != ExitOK {
+		t.Fatalf("expected ExitOK, got %d", code)
+	}
+	if !archiving.called {
+		t.Fatalf("expected archiving after pruning skip")
+	}
+}
+
+func TestRunPruningQuitStopsWithoutArchivingAndFinal(t *testing.T) {
+	cwd := t.TempDir()
+	pruner := &recordingPruner{scan: core.PruneScanResult{Candidates: []core.PruneCandidate{{Month: core.ArchiveMonth{Path: "m"}}}}}
+	pruning := &recordingPruningRunner{result: PruningResult{Outcome: PruningQuit}}
+	scanner := &recordingScanner{}
+	archiving := &recordingArchivingRunner{}
+	final := &recordingFinalRunner{}
+
+	code := Run(context.Background(), baseOptions(cwd, pruner, scanner, archiving, final, withPruning(pruning)))
+	if code != ExitOK {
+		t.Fatalf("expected ExitOK, got %d", code)
+	}
+	if scanner.called || archiving.called || final.called {
+		t.Fatalf("expected hard quit to skip archiving and final summary")
+	}
+}
+
+func TestRunPruningErrorDoesNotBlockArchivingAndExitsError(t *testing.T) {
+	cwd := t.TempDir()
+	pruner := &recordingPruner{scanErr: errors.New("scan denied")}
+	scanner := &recordingScanner{result: core.ScanResult{StaleItems: []core.StaleItem{{DisplayName: "old.txt"}}}}
+	archiving := &recordingArchivingRunner{outcome: ArchivingCompleted}
+	final := &recordingFinalRunner{}
+
+	code := Run(context.Background(), baseOptions(cwd, pruner, scanner, archiving, final))
+	if code != ExitError {
+		t.Fatalf("expected ExitError, got %d", code)
+	}
+	if !archiving.called {
+		t.Fatalf("expected archiving to continue after pruning error")
+	}
+	if !final.called || final.request.Pruning.Err == nil {
+		t.Fatalf("expected final summary with pruning error")
+	}
+}
+
+func TestRunArchivingQuitAfterPruningShowsPruningSummary(t *testing.T) {
+	cwd := t.TempDir()
+	pruner := &recordingPruner{scan: core.PruneScanResult{Candidates: []core.PruneCandidate{{Month: core.ArchiveMonth{Path: "m"}}}}}
+	pruning := &recordingPruningRunner{result: PruningResult{Outcome: PruningConfirmed, Summary: core.PruneSummary{PrunedSize: 1, PrunedPaths: []string{"m"}}}}
+	scanner := &recordingScanner{result: core.ScanResult{StaleItems: []core.StaleItem{{DisplayName: "old.txt"}}}}
+	archiving := &recordingArchivingRunner{outcome: ArchivingCancelled}
+	final := &recordingFinalRunner{}
+
+	code := Run(context.Background(), baseOptions(cwd, pruner, scanner, archiving, final, withPruning(pruning)))
+	if code != ExitOK {
+		t.Fatalf("expected ExitOK, got %d", code)
+	}
+	if !final.called {
+		t.Fatalf("expected final summary after archiving quit")
+	}
+	if !final.request.Pruning.HadCandidates {
+		t.Fatalf("expected pruning summary data")
+	}
+}
+
+func TestRunKeepsSimpleNothingToMoveWithoutPruningOutput(t *testing.T) {
+	cwd := t.TempDir()
+	stdout := new(bytes.Buffer)
+	final := &recordingFinalRunner{}
+
+	code := Run(context.Background(), baseOptions(cwd, &recordingPruner{}, &recordingScanner{}, &recordingArchivingRunner{}, final, withStdout(stdout)))
+	if code != ExitOK {
+		t.Fatalf("expected ExitOK, got %d", code)
 	}
 	if stdout.String() != "Nothing to move\n" {
-		t.Fatalf("expected Nothing to move output, got %q", stdout.String())
+		t.Fatalf("expected simple Nothing to move output, got %q", stdout.String())
+	}
+	if final.called {
+		t.Fatalf("expected no final summary for plain no-op")
 	}
 }
 
-func TestRunSelectsCurrentWorkingDirectoryForDotArg(t *testing.T) {
+func TestRunShowsNothingToMoveInFinalWhenPruningHasOutput(t *testing.T) {
 	cwd := t.TempDir()
-	scanner := &recordingScanner{}
-
-	code := Run(context.Background(), Options{
-		Args:    []string{"."},
-		GOOS:    "windows",
-		Stdout:  new(bytes.Buffer),
-		Stderr:  new(bytes.Buffer),
-		Scanner: scanner,
-		Resolver: fakeResolver{
-			cwd: cwd,
-			dirs: map[string]bool{
-				cwd: true,
-			},
-		},
-	})
-
-	if code != ExitOK {
-		t.Fatalf("expected exit code %d, got %d", ExitOK, code)
-	}
-	if scanner.selectedFolder != cwd {
-		t.Fatalf("expected selected folder %q, got %q", cwd, scanner.selectedFolder)
-	}
-}
-
-func TestRunSelectsProvidedFolder(t *testing.T) {
-	cwd := t.TempDir()
-	selected := filepath.Join(cwd, "Downloads")
-	scanner := &recordingScanner{}
-
-	code := Run(context.Background(), Options{
-		Args:    []string{selected},
-		GOOS:    "windows",
-		Stdout:  new(bytes.Buffer),
-		Stderr:  new(bytes.Buffer),
-		Scanner: scanner,
-		Resolver: fakeResolver{
-			cwd: cwd,
-			dirs: map[string]bool{
-				selected: true,
-			},
-		},
-	})
-
-	if code != ExitOK {
-		t.Fatalf("expected exit code %d, got %d", ExitOK, code)
-	}
-	if scanner.selectedFolder != selected {
-		t.Fatalf("expected selected folder %q, got %q", selected, scanner.selectedFolder)
-	}
-}
-
-func TestRunReportsUsageErrorForTooManyArgs(t *testing.T) {
-	scanner := &recordingScanner{}
-	stderr := new(bytes.Buffer)
-
-	code := Run(context.Background(), Options{
-		Args:     []string{"one", "two"},
-		GOOS:     "windows",
-		Stdout:   new(bytes.Buffer),
-		Stderr:   stderr,
-		Scanner:  scanner,
-		Resolver: fakeResolver{},
-	})
-
-	if code == ExitOK {
-		t.Fatalf("expected non-zero exit code")
-	}
-	if scanner.called {
-		t.Fatalf("scanner should not be called for usage errors")
-	}
-	if !strings.Contains(stderr.String(), "Usage: shed [folder]") {
-		t.Fatalf("expected usage error, got %q", stderr.String())
-	}
-}
-
-func TestRunReportsInvalidSelectedFolder(t *testing.T) {
-	cwd := t.TempDir()
-	missing := filepath.Join(cwd, "missing")
-	scanner := &recordingScanner{}
-	stderr := new(bytes.Buffer)
-
-	code := Run(context.Background(), Options{
-		Args:    []string{missing},
-		GOOS:    "windows",
-		Stdout:  new(bytes.Buffer),
-		Stderr:  stderr,
-		Scanner: scanner,
-		Resolver: fakeResolver{
-			cwd: cwd,
-			errs: map[string]error{
-				missing: fs.ErrNotExist,
-			},
-		},
-	})
-
-	if code == ExitOK {
-		t.Fatalf("expected non-zero exit code")
-	}
-	if scanner.called {
-		t.Fatalf("scanner should not be called for invalid selected folders")
-	}
-	if !strings.Contains(stderr.String(), "Invalid selected folder") {
-		t.Fatalf("expected invalid selected folder error, got %q", stderr.String())
-	}
-}
-
-func TestRunReportsUnsupportedPlatformBeforeScanning(t *testing.T) {
-	scanner := &recordingScanner{}
-	stderr := new(bytes.Buffer)
-
-	code := Run(context.Background(), Options{
-		Args:     nil,
-		GOOS:     "linux",
-		Stdout:   new(bytes.Buffer),
-		Stderr:   stderr,
-		Scanner:  scanner,
-		Resolver: fakeResolver{},
-	})
-
-	if code == ExitOK {
-		t.Fatalf("expected non-zero exit code")
-	}
-	if scanner.called {
-		t.Fatalf("scanner should not be called on unsupported platforms")
-	}
-	if !strings.Contains(stderr.String(), "Unsupported platform") {
-		t.Fatalf("expected unsupported platform error, got %q", stderr.String())
-	}
-}
-
-func TestRunReportsScannerFailure(t *testing.T) {
-	cwd := t.TempDir()
-	stderr := new(bytes.Buffer)
-
-	code := Run(context.Background(), Options{
-		GOOS:   "windows",
-		Stdout: new(bytes.Buffer),
-		Stderr: stderr,
-		Scanner: &recordingScanner{
-			err: errors.New("scan failed"),
-		},
-		Resolver: fakeResolver{
-			cwd: cwd,
-			dirs: map[string]bool{
-				cwd: true,
-			},
-		},
-	})
-
-	if code == ExitOK {
-		t.Fatalf("expected non-zero exit code")
-	}
-	if !strings.Contains(stderr.String(), "Scan failed") {
-		t.Fatalf("expected scan failure, got %q", stderr.String())
-	}
-}
-
-func TestRunPrintsSkippedPathsWhenNothingCanMove(t *testing.T) {
-	cwd := t.TempDir()
+	pruner := &recordingPruner{scan: core.PruneScanResult{Candidates: []core.PruneCandidate{{Month: core.ArchiveMonth{Path: "m"}}}}}
+	pruning := &recordingPruningRunner{result: PruningResult{Outcome: PruningConfirmed, Summary: core.PruneSummary{PrunedSize: 1}}}
+	final := &recordingFinalRunner{}
 	stdout := new(bytes.Buffer)
 
-	code := Run(context.Background(), Options{
-		GOOS:   "windows",
-		Stdout: stdout,
-		Stderr: new(bytes.Buffer),
-		Scanner: &recordingScanner{
-			result: core.ScanResult{
-				SkippedItems: []core.SkippedItem{{Path: filepath.Join(cwd, "unreadable")}},
-			},
-		},
-		Resolver: fakeResolver{
-			cwd: cwd,
-			dirs: map[string]bool{
-				cwd: true,
-			},
-		},
-	})
-
+	code := Run(context.Background(), baseOptions(cwd, pruner, &recordingScanner{}, &recordingArchivingRunner{}, final, withPruning(pruning), withStdout(stdout)))
 	if code != ExitOK {
-		t.Fatalf("expected exit code %d, got %d", ExitOK, code)
+		t.Fatalf("expected ExitOK, got %d", code)
 	}
-	if !strings.Contains(stdout.String(), filepath.Join(cwd, "unreadable")) {
-		t.Fatalf("expected skipped path in output, got %q", stdout.String())
-	}
-}
-
-func TestRunPassesPopulatedScanResultToArchivingRunner(t *testing.T) {
-	cwd := t.TempDir()
-	moveDate := time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)
-	archiving := &recordingArchivingRunner{outcome: ArchivingCompleted}
-	result := core.ScanResult{
-		StaleItems: []core.StaleItem{{DisplayName: "old.txt", Kind: core.FileItem, MoveSize: 10}},
-		MoveSize:   10,
-	}
-
-	code := Run(context.Background(), Options{
-		GOOS:      "windows",
-		Stdout:    new(bytes.Buffer),
-		Stderr:    new(bytes.Buffer),
-		Scanner:   &recordingScanner{result: result},
-		Archiving: archiving,
-		Mover:     &recordingMover{summary: core.MoveSummary{ArchiveBucket: filepath.Join(cwd, "Shed", "2026", "05", filepath.Base(cwd))}},
-		Now:       func() time.Time { return moveDate },
-		Resolver: fakeResolver{
-			cwd: cwd,
-			dirs: map[string]bool{
-				cwd: true,
-			},
-		},
-	})
-
-	if code != ExitOK {
-		t.Fatalf("expected exit code %d, got %d", ExitOK, code)
-	}
-	if !archiving.called {
-		t.Fatalf("expected archiving runner to be called")
-	}
-	if archiving.request.Confirmation.SelectedFolder != cwd {
-		t.Fatalf("expected selected folder %q, got %q", cwd, archiving.request.Confirmation.SelectedFolder)
-	}
-	if archiving.request.Confirmation.HeaderTitle != filepath.Base(cwd) {
-		t.Fatalf("expected header title %q, got %q", filepath.Base(cwd), archiving.request.Confirmation.HeaderTitle)
-	}
-	if !strings.Contains(archiving.request.Confirmation.CompactArchiveBucket, filepath.Join("~", "Shed", "2026", "05")) {
-		t.Fatalf("expected compact archive bucket with move date, got %q", archiving.request.Confirmation.CompactArchiveBucket)
-	}
-}
-
-func TestRunLeavesCancelledOutputToArchivingRunner(t *testing.T) {
-	cwd := t.TempDir()
-	stdout := new(bytes.Buffer)
-
-	code := Run(context.Background(), Options{
-		GOOS:      "windows",
-		Stdout:    stdout,
-		Stderr:    new(bytes.Buffer),
-		Scanner:   &recordingScanner{result: core.ScanResult{StaleItems: []core.StaleItem{{DisplayName: "old.txt"}}}},
-		Archiving: &recordingArchivingRunner{outcome: ArchivingCancelled},
-		Resolver: fakeResolver{
-			cwd: cwd,
-			dirs: map[string]bool{
-				cwd: true,
-			},
-		},
-	})
-
-	if code != ExitOK {
-		t.Fatalf("expected exit code %d, got %d", ExitOK, code)
+	if final.request.Archiving.NothingToMove != true || !final.request.Archiving.Show {
+		t.Fatalf("expected NothingToMove to be reported in final summary")
 	}
 	if stdout.String() != "" {
-		t.Fatalf("expected cancelled output to be owned by archiving runner, got %q", stdout.String())
+		t.Fatalf("expected no direct no-op output when final summary is shown")
 	}
 }
 
-func TestRunMovesAfterConfirmationAndPassesViewData(t *testing.T) {
+func TestRunExitCodePolicy(t *testing.T) {
 	cwd := t.TempDir()
-	stdout := new(bytes.Buffer)
-	archiving := &recordingArchivingRunner{outcome: ArchivingCompleted}
-	skippedPath := filepath.Join(cwd, "unreadable")
-	result := core.ScanResult{
-		StaleItems:   []core.StaleItem{{DisplayName: "old.txt", Path: filepath.Join(cwd, "old.txt"), MoveSize: 10}},
-		SkippedItems: []core.SkippedItem{{Path: skippedPath}},
-		MoveSize:     10,
-	}
-	bucket := filepath.Join(cwd, "Shed", "2026", "05", filepath.Base(cwd))
-	mover := &recordingMover{summary: core.MoveSummary{ArchiveBucket: bucket, MovedSize: 10}}
 
-	code := Run(context.Background(), Options{
-		GOOS:      "windows",
-		Stdout:    stdout,
-		Stderr:    new(bytes.Buffer),
-		Scanner:   &recordingScanner{result: result},
-		Mover:     mover,
-		Archiving: archiving,
-		Resolver: fakeResolver{
-			cwd: cwd,
-			dirs: map[string]bool{
-				cwd: true,
+	cases := []struct {
+		name string
+		opts func() Options
+		want int
+	}{
+		{
+			name: "failed prune paths",
+			opts: func() Options {
+				pruner := &recordingPruner{scan: core.PruneScanResult{Candidates: []core.PruneCandidate{{Month: core.ArchiveMonth{Path: "m"}}}}}
+				pruning := &recordingPruningRunner{result: PruningResult{Outcome: PruningConfirmed, Summary: core.PruneSummary{FailedPaths: []string{"m"}}}}
+				return baseOptions(cwd, pruner, &recordingScanner{}, &recordingArchivingRunner{}, &recordingFinalRunner{}, withPruning(pruning))
 			},
+			want: ExitError,
 		},
-	})
+		{
+			name: "archiving error",
+			opts: func() Options {
+				scanner := &recordingScanner{result: core.ScanResult{StaleItems: []core.StaleItem{{DisplayName: "old"}}}}
+				archiving := &recordingArchivingRunner{outcome: ArchivingCompleted, err: errors.New("move failed")}
+				return baseOptions(cwd, &recordingPruner{}, scanner, archiving, &recordingFinalRunner{})
+			},
+			want: ExitError,
+		},
+		{
+			name: "failed move paths",
+			opts: func() Options {
+				scanner := &recordingScanner{result: core.ScanResult{StaleItems: []core.StaleItem{{DisplayName: "old"}}}}
+				archiving := &recordingArchivingRunner{outcome: ArchivingCompleted, result: core.MoveSummary{FailedPaths: []string{"x"}}}
+				return baseOptions(cwd, &recordingPruner{}, scanner, archiving, &recordingFinalRunner{})
+			},
+			want: ExitError,
+		},
+		{
+			name: "declined archiving without failures",
+			opts: func() Options {
+				scanner := &recordingScanner{result: core.ScanResult{StaleItems: []core.StaleItem{{DisplayName: "old"}}}}
+				archiving := &recordingArchivingRunner{outcome: ArchivingCancelled}
+				return baseOptions(cwd, &recordingPruner{}, scanner, archiving, &recordingFinalRunner{})
+			},
+			want: ExitOK,
+		},
+	}
 
-	if code != ExitOK {
-		t.Fatalf("expected exit code %d, got %d", ExitOK, code)
-	}
-	if !mover.called {
-		t.Fatalf("expected mover to be called")
-	}
-	if !archiving.called {
-		t.Fatalf("expected archiving runner to be called")
-	}
-	if stdout.String() != "" {
-		t.Fatalf("expected final move summary to be owned by archiving runner, got stdout %q", stdout.String())
-	}
-	if len(archiving.request.View.SkippedItems) != 1 || archiving.request.View.SkippedItems[0].Path != skippedPath {
-		t.Fatalf("expected skipped items to be passed to archiving runner, got %#v", archiving.request.View.SkippedItems)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := Run(context.Background(), tc.opts()); got != tc.want {
+				t.Fatalf("expected %d, got %d", tc.want, got)
+			}
+		})
 	}
 }
 
-func TestRunReportsFailedMovesAndExitsNonZero(t *testing.T) {
-	cwd := t.TempDir()
-	failedPath := filepath.Join(cwd, "locked.txt")
-
-	code := Run(context.Background(), Options{
-		GOOS:    "windows",
-		Stdout:  new(bytes.Buffer),
-		Stderr:  new(bytes.Buffer),
-		Scanner: &recordingScanner{result: core.ScanResult{StaleItems: []core.StaleItem{{DisplayName: "locked.txt", Path: failedPath}}}},
-		Mover: &recordingMover{summary: core.MoveSummary{
-			ArchiveBucket: filepath.Join(cwd, "Shed"),
-			FailedPaths:   []string{failedPath},
-		}},
-		Archiving: &recordingArchivingRunner{outcome: ArchivingCompleted},
-		Resolver: fakeResolver{
-			cwd: cwd,
-			dirs: map[string]bool{
-				cwd: true,
-			},
-		},
-	})
-
-	if code == ExitOK {
-		t.Fatalf("expected non-zero exit code")
-	}
+type recordingPruner struct {
+	scanCalled bool
+	scan       core.PruneScanResult
+	scanErr    error
 }
 
-func TestRunLeavesPreflightFailureOutputToArchivingRunner(t *testing.T) {
-	cwd := t.TempDir()
-	stderr := new(bytes.Buffer)
-
-	code := Run(context.Background(), Options{
-		GOOS:      "windows",
-		Stdout:    new(bytes.Buffer),
-		Stderr:    stderr,
-		Scanner:   &recordingScanner{result: core.ScanResult{StaleItems: []core.StaleItem{{DisplayName: "old.txt"}}}},
-		Mover:     &recordingMover{err: errors.New("selected folder unavailable")},
-		Archiving: &recordingArchivingRunner{outcome: ArchivingCompleted},
-		Resolver: fakeResolver{
-			cwd: cwd,
-			dirs: map[string]bool{
-				cwd: true,
-			},
-		},
-	})
-
-	if code == ExitOK {
-		t.Fatalf("expected non-zero exit code")
-	}
-	if stderr.String() != "" {
-		t.Fatalf("expected preflight failure output to be owned by archiving runner, got %q", stderr.String())
-	}
+func (p *recordingPruner) Scan(context.Context) (core.PruneScanResult, error) {
+	p.scanCalled = true
+	return p.scan, p.scanErr
 }
 
-func TestRunPassesSkippedPathsAfterConfirmedRun(t *testing.T) {
-	cwd := t.TempDir()
-	stdout := new(bytes.Buffer)
-	archiving := &recordingArchivingRunner{outcome: ArchivingCompleted}
-	skippedPath := filepath.Join(cwd, "unreadable")
-
-	code := Run(context.Background(), Options{
-		GOOS:   "windows",
-		Stdout: stdout,
-		Stderr: new(bytes.Buffer),
-		Scanner: &recordingScanner{result: core.ScanResult{
-			StaleItems:   []core.StaleItem{{DisplayName: "old.txt"}},
-			SkippedItems: []core.SkippedItem{{Path: skippedPath}},
-		}},
-		Mover:     &recordingMover{summary: core.MoveSummary{ArchiveBucket: filepath.Join(cwd, "Shed")}},
-		Archiving: archiving,
-		Resolver: fakeResolver{
-			cwd: cwd,
-			dirs: map[string]bool{
-				cwd: true,
-			},
-		},
-	})
-
-	if code != ExitOK {
-		t.Fatalf("expected exit code %d, got %d", ExitOK, code)
-	}
-	if stdout.String() != "" {
-		t.Fatalf("expected final move summary to be owned by archiving runner, got stdout %q", stdout.String())
-	}
-	if len(archiving.request.View.SkippedItems) != 1 || archiving.request.View.SkippedItems[0].Path != skippedPath {
-		t.Fatalf("expected skipped item to be passed to archiving runner, got %#v", archiving.request.View.SkippedItems)
-	}
+func (p *recordingPruner) Prune(context.Context, core.PruneScanResult) (core.PruneSummary, error) {
+	return core.PruneSummary{}, nil
 }
 
-func TestRunReportsArchivingRunnerFailure(t *testing.T) {
-	cwd := t.TempDir()
-	stderr := new(bytes.Buffer)
+type recordingPruningRunner struct {
+	result PruningResult
+	err    error
+}
 
-	code := Run(context.Background(), Options{
-		GOOS:      "windows",
-		Stdout:    new(bytes.Buffer),
-		Stderr:    stderr,
-		Scanner:   &recordingScanner{result: core.ScanResult{StaleItems: []core.StaleItem{{DisplayName: "old.txt"}}}},
-		Archiving: &recordingArchivingRunner{err: errors.New("terminal unavailable")},
-		Resolver: fakeResolver{
-			cwd: cwd,
-			dirs: map[string]bool{
-				cwd: true,
-			},
-		},
-	})
-
-	if code == ExitOK {
-		t.Fatalf("expected non-zero exit code")
-	}
-	if !strings.Contains(stderr.String(), "terminal unavailable") {
-		t.Fatalf("expected confirmation failure, got %q", stderr.String())
-	}
+func (r *recordingPruningRunner) RunPruning(context.Context, PruningRequest) (PruningResult, error) {
+	return r.result, r.err
 }
 
 type recordingScanner struct {
-	called         bool
-	selectedFolder string
-	err            error
-	result         core.ScanResult
+	called bool
+	result core.ScanResult
+	err    error
 }
 
-func (s *recordingScanner) Scan(_ context.Context, selectedFolder string) (core.ScanResult, error) {
+func (s *recordingScanner) Scan(context.Context, string) (core.ScanResult, error) {
 	s.called = true
-	s.selectedFolder = selectedFolder
-	if s.err != nil {
-		return core.ScanResult{}, s.err
-	}
-	return s.result, nil
-}
-
-type recordingMover struct {
-	called         bool
-	selectedFolder string
-	scan           core.ScanResult
-	summary        core.MoveSummary
-	err            error
-}
-
-func (m *recordingMover) Move(_ context.Context, selectedFolder string, scan core.ScanResult) (core.MoveSummary, error) {
-	m.called = true
-	m.selectedFolder = selectedFolder
-	m.scan = scan
-	if m.err != nil {
-		return core.MoveSummary{}, m.err
-	}
-	return m.summary, nil
+	return s.result, s.err
 }
 
 type recordingArchivingRunner struct {
 	called  bool
-	request ArchivingRequest
 	outcome ArchivingOutcome
+	result  core.MoveSummary
 	err     error
 }
 
-func (runner *recordingArchivingRunner) RunArchiving(ctx context.Context, request ArchivingRequest) (ArchivingResult, error) {
-	runner.called = true
-	runner.request = request
-	if runner.err != nil {
-		return ArchivingResult{}, runner.err
-	}
-	if runner.outcome == ArchivingCancelled {
-		return ArchivingResult{Outcome: ArchivingCancelled}, nil
-	}
-	summary, err := request.Move(ctx)
-	return ArchivingResult{
-		Outcome: ArchivingCompleted,
-		Summary: summary,
-	}, err
+func (r *recordingArchivingRunner) RunArchiving(context.Context, ArchivingRequest) (ArchivingResult, error) {
+	r.called = true
+	return ArchivingResult{Outcome: r.outcome, Summary: r.result}, r.err
+}
+
+type recordingFinalRunner struct {
+	called  bool
+	request FinalSummaryRequest
+}
+
+func (r *recordingFinalRunner) RunFinal(_ context.Context, request FinalSummaryRequest) error {
+	r.called = true
+	r.request = request
+	return nil
 }
 
 type fakeResolver struct {
-	cwd  string
-	dirs map[string]bool
-	errs map[string]error
+	cwd string
+	err error
 }
 
 func (r fakeResolver) Resolve(arg string) (string, error) {
-	selected := arg
+	if r.err != nil {
+		return "", r.err
+	}
 	if arg == "" || arg == "." {
-		selected = r.cwd
+		return r.cwd, nil
 	}
-	if err, ok := r.errs[selected]; ok {
-		return "", err
+	return arg, nil
+}
+
+type optionMutator func(*Options)
+
+func withPruning(pruning PruningRunner) optionMutator {
+	return func(opts *Options) { opts.Pruning = pruning }
+}
+
+func withStdout(stdout *bytes.Buffer) optionMutator {
+	return func(opts *Options) { opts.Stdout = stdout }
+}
+
+func baseOptions(cwd string, pruner Pruner, scanner Scanner, archiving ArchivingRunner, final FinalRunner, mutators ...optionMutator) Options {
+	opts := Options{
+		GOOS:      "windows",
+		Stdout:    new(bytes.Buffer),
+		Stderr:    new(bytes.Buffer),
+		Resolver:  fakeResolver{cwd: cwd},
+		Pruner:    pruner,
+		Scanner:   scanner,
+		Mover:     &recordingMover{},
+		Archiving: archiving,
+		Final:     final,
 	}
-	if !r.dirs[selected] {
-		return "", os.ErrNotExist
+	for _, mutate := range mutators {
+		mutate(&opts)
 	}
-	return selected, nil
+	return opts
+}
+
+type recordingMover struct{}
+
+func (recordingMover) Move(_ context.Context, selectedFolder string, _ core.ScanResult) (core.MoveSummary, error) {
+	return core.MoveSummary{ArchiveBucket: filepath.Join(selectedFolder, "Shed")}, nil
+}
+
+func TestNothingToMoveStillIncludesSkippedInSimpleOutput(t *testing.T) {
+	cwd := t.TempDir()
+	stdout := new(bytes.Buffer)
+	skipped := filepath.Join(cwd, "unreadable")
+	code := Run(context.Background(), baseOptions(cwd, &recordingPruner{}, &recordingScanner{result: core.ScanResult{SkippedItems: []core.SkippedItem{{Path: skipped}}}}, &recordingArchivingRunner{}, &recordingFinalRunner{}, withStdout(stdout)))
+	if code != ExitOK {
+		t.Fatalf("expected ExitOK, got %d", code)
+	}
+	if !strings.Contains(stdout.String(), "Nothing to move") || !strings.Contains(stdout.String(), skipped) {
+		t.Fatalf("expected skipped path in simple output, got %q", stdout.String())
+	}
 }

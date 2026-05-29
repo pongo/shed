@@ -22,6 +22,7 @@ func TestFinalSummaryRendersPruningSectionWithSuccessAndFailures(t *testing.T) {
 			},
 		},
 		Archiving: app.ArchivingFinalData{
+			Show:          true,
 			NothingToMove: true,
 		},
 	})
@@ -47,6 +48,7 @@ func TestFinalSummaryRendersPruningErrors(t *testing.T) {
 			Err:           errors.New("scan denied"),
 		},
 		Archiving: app.ArchivingFinalData{
+			Show:          true,
 			NothingToMove: true,
 		},
 	})
@@ -60,6 +62,7 @@ func TestFinalSummaryRendersArchivingMoveSummary(t *testing.T) {
 	bucket := filepath.Join("C:", "Users", "pavel", "Shed", "2026", "05", "Downloads")
 	view := formatFinalSummary(app.FinalSummaryRequest{
 		Archiving: app.ArchivingFinalData{
+			Show: true,
 			Summary: core.MoveSummary{
 				MovedSize:     10,
 				ArchiveBucket: bucket,
@@ -89,6 +92,7 @@ func TestFinalSummaryRendersNothingToMoveInArchivingSection(t *testing.T) {
 			Summary:       core.PruneSummary{PrunedSize: 1},
 		},
 		Archiving: app.ArchivingFinalData{
+			Show:          true,
 			NothingToMove: true,
 		},
 	})
@@ -106,6 +110,7 @@ func TestFinalSummarySeparatesSectionsWithBlankLine(t *testing.T) {
 			Summary:       core.PruneSummary{PrunedSize: 1},
 		},
 		Archiving: app.ArchivingFinalData{
+			Show:          true,
 			NothingToMove: true,
 		},
 	})
@@ -122,6 +127,7 @@ func TestFinalSummaryOmitsPruningWhenNoOpOrSkippedWithoutErrors(t *testing.T) {
 			Outcome:       app.PruningSkipped,
 		},
 		Archiving: app.ArchivingFinalData{
+			Show:          true,
 			NothingToMove: true,
 		},
 	})
