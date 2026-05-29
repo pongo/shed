@@ -20,13 +20,13 @@ _Avoid_: Self archive
 A folder inside the **Archive** for items moved from a selected folder name during a calendar month, shaped as `~\Shed\<yyyy>\<MM>\<source-folder-name>`.
 _Avoid_: Archive destination
 
-**Archive pruning**:
-The cleanup step that sends **Archive buckets** older than six months to the Recycle Bin.
-_Avoid_: Archive cleanup, pruning
+**Archive month**:
+A calendar-month folder inside the **Archive**, shaped as `~\Shed\<yyyy>\<MM>`, containing zero or more **Archive buckets**. Its age is determined only from its `<yyyy>\<MM>` path components.
+_Avoid_: Archive month bucket, monthly bucket
 
-**Cancelled run**:
-A run where the user declined archiving from the TUI.
-_Avoid_: Closed run
+**Archive pruning**:
+The cleanup step that sends **Archive months** older than six months to the Recycle Bin. If a year folder becomes empty after pruning, shed also sends that year folder to the Recycle Bin.
+_Avoid_: Archive cleanup, pruning
 
 **Archived item**:
 A file, folder, or symlink that has been moved into an **Archive bucket**.
@@ -43,6 +43,10 @@ _Avoid_: Archive growth, disk growth
 **Move summary**:
 The final report after archiving completes, containing the actual size successfully moved, the **Archive bucket** path, and any **Failed move** paths. A successful folder rename may add that folder's full **Move size** at once; a partial **Merge** adds only the sizes of nested items that moved successfully.
 _Avoid_: Move log
+
+**Prune summary**:
+The final report after confirmed **Archive pruning**, containing the actual size sent to the Recycle Bin, the pruned **Archive month** paths, and any failed prune paths.
+_Avoid_: Prune log, cleanup summary
 
 **Move order**:
 The deterministic order for displaying stale items in the TUI: folders alphabetically first, then files and symlinks alphabetically. shed may move stale items in any order after confirmation.
