@@ -47,7 +47,7 @@ func renderPruningSection(pruning app.PruningFinalData) (string, bool) {
 	lines := []string{"Archive pruning"}
 	lines = append(lines, fmt.Sprintf("%s moved to Recycle Bin", core.FormatSize(pruning.Summary.PrunedSize)))
 	for _, path := range pruning.Summary.PrunedPaths {
-		lines = append(lines, "Pruned Archive month: "+path)
+		lines = append(lines, "Pruned: "+path)
 	}
 	for _, path := range pruning.Summary.FailedPaths {
 		lines = append(lines, "Failed prune: "+path)

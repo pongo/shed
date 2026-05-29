@@ -30,8 +30,8 @@ func TestFinalSummaryRendersPruningSectionWithSuccessAndFailures(t *testing.T) {
 	for _, want := range []string{
 		"Archive pruning",
 		"3 KB moved to Recycle Bin",
-		"Pruned Archive month: " + filepath.Join("~", "Shed", "2024", "01"),
-		"Pruned Archive month: " + filepath.Join("~", "Shed", "2024", "02"),
+		"Pruned: " + filepath.Join("~", "Shed", "2024", "01"),
+		"Pruned: " + filepath.Join("~", "Shed", "2024", "02"),
 		"Failed prune: " + filepath.Join("~", "Shed", "2024", "03"),
 	} {
 		if !strings.Contains(view, want) {
