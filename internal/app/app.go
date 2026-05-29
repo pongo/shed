@@ -148,7 +148,7 @@ func Run(ctx context.Context, opts Options) int {
 
 	selectedFolder, err := opts.Resolver.Resolve(arg)
 	if err != nil {
-		fmt.Fprintf(opts.Stderr, "Invalid selected folder: %v\n", err)
+		_, _ = fmt.Fprintf(opts.Stderr, "Invalid selected folder: %v\n", err)
 		return ExitError
 	}
 

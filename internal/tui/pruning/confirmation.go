@@ -141,7 +141,7 @@ func (archiveMonthDelegate) Update(tea.Msg, *list.Model) tea.Cmd {
 }
 
 func (archiveMonthDelegate) Render(w io.Writer, _ list.Model, _ int, item list.Item) {
-	fmt.Fprint(w, listItemStyle.Render("  "+item.FilterValue()))
+	_, _ = fmt.Fprint(w, listItemStyle.Render("  "+item.FilterValue()))
 }
 
 var headerStyle = lipgloss.NewStyle().

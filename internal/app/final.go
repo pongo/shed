@@ -7,13 +7,13 @@ import (
 
 func runFinalPhase(ctx context.Context, opts Options, pruning PruningFinalData, archiving ArchivingFinalData) int {
 	if archiving.scanFailed && !hasPruningReport(pruning) {
-		fmt.Fprintf(opts.Stderr, "Scan failed: %v\n", archiving.Err)
+		_, _ = fmt.Fprintf(opts.Stderr, "Scan failed: %v\n", archiving.Err)
 		return ExitError
 	}
 	if archiving.NothingToMove && !hasPruningReport(pruning) {
-		fmt.Fprintln(opts.Stdout, "Nothing to move")
+		_, _ = fmt.Fprintln(opts.Stdout, "Nothing to move")
 		for _, skipped := range archiving.SkippedItems {
-			fmt.Fprintf(opts.Stdout, "Skipped item: %s\n", skipped.Path)
+			_, _ = fmt.Fprintf(opts.Stdout, "Skipped item: %s\n", skipped.Path)
 		}
 		return ExitOK
 	}

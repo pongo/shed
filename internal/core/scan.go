@@ -81,7 +81,7 @@ func Eligible(item RootItem) bool {
 	if item.Hidden {
 		return false
 	}
-	return !(item.Kind == FolderItem && strings.HasPrefix(item.Name, "."))
+	return item.Kind != FolderItem || !strings.HasPrefix(item.Name, ".")
 }
 
 func Stale(item RootItem, boundary time.Time) bool {

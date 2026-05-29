@@ -35,18 +35,18 @@ func run(
 	userArchiveRoot func() (string, error),
 ) int {
 	if unsupportedPlatform() {
-		fmt.Fprintln(stderr, "Unsupported platform")
+		_, _ = fmt.Fprintln(stderr, "Unsupported platform")
 		return app.ExitError
 	}
 
 	if len(args) > 1 {
-		fmt.Fprintln(stderr, "Usage: shed [folder]")
+		_, _ = fmt.Fprintln(stderr, "Usage: shed [folder]")
 		return app.ExitError
 	}
 
 	archiveRoot, err := userArchiveRoot()
 	if err != nil {
-		fmt.Fprintf(stderr, "Archive path unavailable: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "Archive path unavailable: %v\n", err)
 		return app.ExitError
 	}
 

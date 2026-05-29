@@ -183,5 +183,5 @@ func (displayNameDelegate) Update(tea.Msg, *list.Model) tea.Cmd {
 }
 
 func (displayNameDelegate) Render(w io.Writer, _ list.Model, _ int, item list.Item) {
-	fmt.Fprint(w, listItemStyle.Render(listItemIndent+item.FilterValue()))
+	_, _ = fmt.Fprint(w, listItemStyle.Render(listItemIndent+item.FilterValue()))
 }
