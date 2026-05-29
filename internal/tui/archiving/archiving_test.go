@@ -77,7 +77,7 @@ func TestArchivingModelClearsManagedViewAfterCancel(t *testing.T) {
 	}
 }
 
-func TestRunnerRendersCancelledOutputAfterEscape(t *testing.T) {
+func TestRunnerReturnsCancelledOutcomeWithoutOutputAfterEscape(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	output := new(bytes.Buffer)
@@ -93,12 +93,14 @@ func TestRunnerRendersCancelledOutputAfterEscape(t *testing.T) {
 	if result.Outcome != app.ArchivingCancelled {
 		t.Fatalf("expected cancelled outcome, got %v", result.Outcome)
 	}
-	if !strings.Contains(output.String(), "Cancelled") {
-		t.Fatalf("expected output to contain Cancelled, got %q", output.String())
+	for _, notWant := range []string{"Cancelled", "moved to", "Preflight failure:"} {
+		if strings.Contains(output.String(), notWant) {
+			t.Fatalf("expected no runner-owned message %q, got %q", notWant, output.String())
+		}
 	}
 }
 
-func TestRunnerRendersFinalSummaryOutputAfterMove(t *testing.T) {
+func TestRunnerReturnsSummaryWithoutPrintingFinalOutput(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	output := new(bytes.Buffer)
@@ -121,12 +123,17 @@ func TestRunnerRendersFinalSummaryOutputAfterMove(t *testing.T) {
 	if result.Outcome != app.ArchivingCompleted {
 		t.Fatalf("expected completed outcome, got %v", result.Outcome)
 	}
-	if !strings.Contains(output.String(), "10 B moved to "+bucket) {
-		t.Fatalf("expected output to contain final summary, got %q", output.String())
+	if result.Summary.MovedSize != 10 || result.Summary.ArchiveBucket != bucket {
+		t.Fatalf("unexpected returned summary: %+v", result.Summary)
+	}
+	for _, notWant := range []string{"Cancelled", "moved to", "Preflight failure:"} {
+		if strings.Contains(output.String(), notWant) {
+			t.Fatalf("expected no runner-owned message %q, got %q", notWant, output.String())
+		}
 	}
 }
 
-func TestRunnerRendersPreflightFailureOutputAfterMoveError(t *testing.T) {
+func TestRunnerReturnsMoveErrorWithoutPrinting(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	output := new(bytes.Buffer)
@@ -148,8 +155,28 @@ func TestRunnerRendersPreflightFailureOutputAfterMoveError(t *testing.T) {
 	if result.Outcome != app.ArchivingCompleted {
 		t.Fatalf("expected completed outcome for attempted archiving, got %v", result.Outcome)
 	}
-	if !strings.Contains(output.String(), "Preflight failure: selected folder unavailable") {
-		t.Fatalf("expected output to contain preflight failure, got %q", output.String())
+	for _, notWant := range []string{"Cancelled", "moved to", "Preflight failure:"} {
+		if strings.Contains(output.String(), notWant) {
+			t.Fatalf("expected no runner-owned message %q, got %q", notWant, output.String())
+		}
+	}
+}
+
+func TestRunnerReturnsCancelledOutcomeForAllCancelKeys(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	for _, input := range []string{"n", "q", "\x1b", "\x03"} {
+		result, err := (Runner{
+			Input:  strings.NewReader(input),
+			Output: new(bytes.Buffer),
+		}).RunArchiving(ctx, testArchivingRequest())
+		if err != nil {
+			t.Fatalf("expected no error for input %q, got %v", input, err)
+		}
+		if result.Outcome != app.ArchivingCancelled {
+			t.Fatalf("expected cancelled outcome for input %q, got %v", input, result.Outcome)
+		}
 	}
 }
 

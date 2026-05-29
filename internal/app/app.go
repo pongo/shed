@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"runtime"
 	"time"
 
 	"shed/internal/core"
@@ -17,13 +16,15 @@ const (
 
 type Options struct {
 	Args      []string
-	GOOS      string
 	Stdout    io.Writer
 	Stderr    io.Writer
 	Resolver  SelectedFolderResolver
+	Pruner    Pruner
+	Pruning   PruningRunner
 	Scanner   Scanner
 	Mover     Mover
 	Archiving ArchivingRunner
+	Final     FinalRunner
 	Now       func() time.Time
 }
 
@@ -38,11 +39,23 @@ type Scanner interface {
 type Mover interface {
 	Move(ctx context.Context, selectedFolder string, scan core.ScanResult) (core.MoveSummary, error)
 }
+type Pruner interface {
+	Scan(ctx context.Context) (core.PruneScanResult, error)
+	Prune(ctx context.Context, scan core.PruneScanResult) (core.PruneSummary, error)
+}
 
 type MoveFunc func(ctx context.Context) (core.MoveSummary, error)
+type PruneFunc func(ctx context.Context) (core.PruneSummary, error)
 
 type ArchivingRunner interface {
 	RunArchiving(ctx context.Context, request ArchivingRequest) (ArchivingResult, error)
+}
+
+type PruningRunner interface {
+	RunPruning(ctx context.Context, request PruningRequest) (PruningResult, error)
+}
+type FinalRunner interface {
+	RunFinal(ctx context.Context, request FinalSummaryRequest) error
 }
 
 type ArchivingRequest struct {
@@ -54,6 +67,37 @@ type ArchivingRequest struct {
 type ArchivingResult struct {
 	Outcome ArchivingOutcome
 	Summary core.MoveSummary
+}
+
+type PruningRequest struct {
+	Scan  core.PruneScanResult
+	Prune PruneFunc
+}
+
+type PruningResult struct {
+	Outcome PruningOutcome
+	Summary core.PruneSummary
+}
+
+type FinalSummaryRequest struct {
+	Pruning   PruningFinalData
+	Archiving ArchivingFinalData
+}
+
+type PruningFinalData struct {
+	HadCandidates bool
+	Outcome       PruningOutcome
+	Summary       core.PruneSummary
+	Err           error
+}
+
+type ArchivingFinalData struct {
+	Show          bool
+	NothingToMove bool
+	Summary       core.MoveSummary
+	SkippedItems  []core.SkippedItem
+	Err           error
+	scanFailed    bool
 }
 
 type MoveViewData struct {
@@ -74,6 +118,14 @@ const (
 	ArchivingCompleted
 )
 
+type PruningOutcome int
+
+const (
+	PruningSkipped PruningOutcome = iota
+	PruningConfirmed
+	PruningQuit
+)
+
 type EmptyScanner struct{}
 
 func (EmptyScanner) Scan(context.Context, string) (core.ScanResult, error) {
@@ -89,16 +141,6 @@ func (missingResolver) Resolve(string) (string, error) {
 func Run(ctx context.Context, opts Options) int {
 	opts = withDefaults(opts)
 
-	if opts.GOOS != "windows" {
-		fmt.Fprintln(opts.Stderr, "Unsupported platform")
-		return ExitError
-	}
-
-	if len(opts.Args) > 1 {
-		fmt.Fprintln(opts.Stderr, "Usage: shed [folder]")
-		return ExitError
-	}
-
 	arg := ""
 	if len(opts.Args) == 1 {
 		arg = opts.Args[0]
@@ -110,56 +152,17 @@ func Run(ctx context.Context, opts Options) int {
 		return ExitError
 	}
 
-	result, err := opts.Scanner.Scan(ctx, selectedFolder)
-	if err != nil {
-		fmt.Fprintf(opts.Stderr, "Scan failed: %v\n", err)
-		return ExitError
-	}
-
-	if len(result.StaleItems) == 0 {
-		fmt.Fprintln(opts.Stdout, "Nothing to move")
-		for _, skipped := range result.SkippedItems {
-			fmt.Fprintf(opts.Stdout, "Skipped item: %s\n", skipped.Path)
-		}
+	pruning, keepRunning := runPruningPhase(ctx, opts)
+	if !keepRunning {
 		return ExitOK
 	}
 
-	confirmation := ConfirmationRequest{
-		SelectedFolder:       selectedFolder,
-		HeaderTitle:          core.HeaderTitle(selectedFolder),
-		CompactArchiveBucket: core.CompactArchiveBucket(opts.Now(), selectedFolder),
-		ScanResult:           result,
-	}
-	archiving, err := opts.Archiving.RunArchiving(ctx, ArchivingRequest{
-		Confirmation: confirmation,
-		Move: func(ctx context.Context) (core.MoveSummary, error) {
-			return opts.Mover.Move(ctx, selectedFolder, result)
-		},
-		View: MoveViewData{
-			SkippedItems: result.SkippedItems,
-		},
-	})
-	if err != nil {
-		if archiving.Outcome == ArchivingCompleted {
-			return ExitError
-		}
-		fmt.Fprintf(opts.Stderr, "Archiving failed: %v\n", err)
-		return ExitError
-	}
-	if archiving.Outcome == ArchivingCancelled {
-		return ExitOK
-	}
+	archiving := runArchivingPhase(ctx, opts, selectedFolder, pruning)
 
-	if len(archiving.Summary.FailedPaths) > 0 {
-		return ExitError
-	}
-	return ExitOK
+	return runFinalPhase(ctx, opts, pruning, archiving)
 }
 
 func withDefaults(opts Options) Options {
-	if opts.GOOS == "" {
-		opts.GOOS = runtime.GOOS
-	}
 	if opts.Stdout == nil {
 		opts.Stdout = io.Discard
 	}
@@ -175,8 +178,17 @@ func withDefaults(opts Options) Options {
 	if opts.Mover == nil {
 		opts.Mover = missingMover{}
 	}
+	if opts.Pruner == nil {
+		opts.Pruner = emptyPruner{}
+	}
+	if opts.Pruning == nil {
+		opts.Pruning = passthroughPruningRunner{}
+	}
 	if opts.Archiving == nil {
 		opts.Archiving = passthroughArchivingRunner{}
+	}
+	if opts.Final == nil {
+		opts.Final = noopFinalRunner{}
 	}
 	if opts.Now == nil {
 		opts.Now = time.Now
@@ -198,4 +210,30 @@ func (passthroughArchivingRunner) RunArchiving(ctx context.Context, request Arch
 		Outcome: ArchivingCompleted,
 		Summary: summary,
 	}, err
+}
+
+type passthroughPruningRunner struct{}
+
+func (passthroughPruningRunner) RunPruning(ctx context.Context, request PruningRequest) (PruningResult, error) {
+	summary, err := request.Prune(ctx)
+	return PruningResult{
+		Outcome: PruningConfirmed,
+		Summary: summary,
+	}, err
+}
+
+type emptyPruner struct{}
+
+func (emptyPruner) Scan(context.Context) (core.PruneScanResult, error) {
+	return core.PruneScanResult{}, nil
+}
+
+func (emptyPruner) Prune(context.Context, core.PruneScanResult) (core.PruneSummary, error) {
+	return core.PruneSummary{}, nil
+}
+
+type noopFinalRunner struct{}
+
+func (noopFinalRunner) RunFinal(context.Context, FinalSummaryRequest) error {
+	return nil
 }
