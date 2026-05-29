@@ -2,7 +2,6 @@ package archiving
 
 import (
 	"context"
-	"fmt"
 	"io"
 
 	tea "charm.land/bubbletea/v2"
@@ -38,14 +37,7 @@ func (runner Runner) RunArchiving(ctx context.Context, request app.ArchivingRequ
 		return app.ArchivingResult{}, nil
 	}
 	if archiving.cancelled {
-		fmt.Fprintln(output, "Cancelled")
 		return app.ArchivingResult{Outcome: app.ArchivingCancelled}, nil
-	}
-	if archiving.err != nil {
-		fmt.Fprintf(output, "Preflight failure: %v\n", archiving.err)
-	}
-	if archiving.err == nil {
-		fmt.Fprint(output, formatFinalSummary(archiving.summary, request.View.SkippedItems))
 	}
 	return app.ArchivingResult{
 		Outcome: app.ArchivingCompleted,
