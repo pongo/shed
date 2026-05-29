@@ -40,9 +40,14 @@ type Mover interface {
 }
 
 type MoveFunc func(ctx context.Context) (core.MoveSummary, error)
+type PruneFunc func(ctx context.Context) (core.PruneSummary, error)
 
 type ArchivingRunner interface {
 	RunArchiving(ctx context.Context, request ArchivingRequest) (ArchivingResult, error)
+}
+
+type PruningRunner interface {
+	RunPruning(ctx context.Context, request PruningRequest) (PruningResult, error)
 }
 
 type ArchivingRequest struct {
@@ -54,6 +59,16 @@ type ArchivingRequest struct {
 type ArchivingResult struct {
 	Outcome ArchivingOutcome
 	Summary core.MoveSummary
+}
+
+type PruningRequest struct {
+	Scan  core.PruneScanResult
+	Prune PruneFunc
+}
+
+type PruningResult struct {
+	Outcome PruningOutcome
+	Summary core.PruneSummary
 }
 
 type MoveViewData struct {
@@ -72,6 +87,14 @@ type ArchivingOutcome int
 const (
 	ArchivingCancelled ArchivingOutcome = iota
 	ArchivingCompleted
+)
+
+type PruningOutcome int
+
+const (
+	PruningSkipped PruningOutcome = iota
+	PruningConfirmed
+	PruningQuit
 )
 
 type EmptyScanner struct{}
