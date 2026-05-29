@@ -1,4 +1,4 @@
-package archiving
+package shedding
 
 import (
 	"bytes"
@@ -41,33 +41,33 @@ func TestModelCancelsWithConfiguredKeys(t *testing.T) {
 	}
 }
 
-func TestArchivingModelTransitionsFromConfirmationToMoving(t *testing.T) {
-	initialModel := newModel(context.Background(), testArchivingRequest())
+func TestSheddingModelTransitionsFromConfirmationToMoving(t *testing.T) {
+	initialModel := newModel(context.Background(), testSheddingRequest())
 
 	updated, _ := initialModel.Update(enterPress())
-	archiving := updated.(model)
-	view := archiving.View()
+	shedding := updated.(model)
+	view := shedding.View()
 
-	if archiving.phase != phaseMoving {
-		t.Fatalf("expected moving phase, got %v", archiving.phase)
+	if shedding.phase != phaseMoving {
+		t.Fatalf("expected moving phase, got %v", shedding.phase)
 	}
-	if !strings.Contains(view.Content, "Moving items into Archive") {
+	if !strings.Contains(view.Content, "Moving items into Shed") {
 		t.Fatalf("expected moving view after confirmation, got %q", view.Content)
 	}
 	if view.Content == "" {
-		t.Fatalf("expected archiving transition not to render an empty clear view")
+		t.Fatalf("expected shedding transition not to render an empty clear view")
 	}
 }
 
-func TestArchivingModelClearsManagedViewAfterCancel(t *testing.T) {
-	initialModel := newModel(context.Background(), testArchivingRequest())
+func TestSheddingModelClearsManagedViewAfterCancel(t *testing.T) {
+	initialModel := newModel(context.Background(), testSheddingRequest())
 
 	updated, _ := initialModel.Update(escapePress())
-	archiving := updated.(model)
-	view := archiving.View()
+	shedding := updated.(model)
+	view := shedding.View()
 
-	if archiving.phase != phaseCancelled {
-		t.Fatalf("expected cancelled phase, got %v", archiving.phase)
+	if shedding.phase != phaseCancelled {
+		t.Fatalf("expected cancelled phase, got %v", shedding.phase)
 	}
 	if view.Content != "" {
 		t.Fatalf("expected cancelled phase to clear managed view, got %q", view.Content)
@@ -85,12 +85,12 @@ func TestRunnerReturnsCancelledOutcomeWithoutOutputAfterEscape(t *testing.T) {
 	result, err := (Runner{
 		Input:  strings.NewReader("\x1b"),
 		Output: output,
-	}).RunArchiving(ctx, testArchivingRequest())
+	}).RunShedding(ctx, testSheddingRequest())
 
 	if err != nil {
 		t.Fatalf("expected runner to finish without error, got %v", err)
 	}
-	if result.Outcome != app.ArchivingCancelled {
+	if result.Outcome != app.SheddingCancelled {
 		t.Fatalf("expected cancelled outcome, got %v", result.Outcome)
 	}
 	for _, notWant := range []string{"Cancelled", "moved to", "Preflight failure:"} {
@@ -109,10 +109,10 @@ func TestRunnerReturnsSummaryWithoutPrintingFinalOutput(t *testing.T) {
 	result, err := (Runner{
 		Input:  strings.NewReader("\r"),
 		Output: output,
-	}).RunArchiving(ctx, app.ArchivingRequest{
+	}).RunShedding(ctx, app.SheddingRequest{
 		Confirmation: testRequest(),
 		Move: func(context.Context) (core.MoveSummary, error) {
-			return core.MoveSummary{MovedSize: 10, ArchiveBucket: bucket}, nil
+			return core.MoveSummary{MovedSize: 10, ShedBucket: bucket}, nil
 		},
 		View: app.MoveViewData{},
 	})
@@ -120,10 +120,10 @@ func TestRunnerReturnsSummaryWithoutPrintingFinalOutput(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected runner to finish without error, got %v", err)
 	}
-	if result.Outcome != app.ArchivingCompleted {
+	if result.Outcome != app.SheddingCompleted {
 		t.Fatalf("expected completed outcome, got %v", result.Outcome)
 	}
-	if result.Summary.MovedSize != 10 || result.Summary.ArchiveBucket != bucket {
+	if result.Summary.MovedSize != 10 || result.Summary.ShedBucket != bucket {
 		t.Fatalf("unexpected returned summary: %+v", result.Summary)
 	}
 	for _, notWant := range []string{"Cancelled", "moved to", "Preflight failure:"} {
@@ -141,7 +141,7 @@ func TestRunnerReturnsMoveErrorWithoutPrinting(t *testing.T) {
 	result, err := (Runner{
 		Input:  strings.NewReader("\r"),
 		Output: output,
-	}).RunArchiving(ctx, app.ArchivingRequest{
+	}).RunShedding(ctx, app.SheddingRequest{
 		Confirmation: testRequest(),
 		Move: func(context.Context) (core.MoveSummary, error) {
 			return core.MoveSummary{}, errors.New("selected folder unavailable")
@@ -152,8 +152,8 @@ func TestRunnerReturnsMoveErrorWithoutPrinting(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected move error")
 	}
-	if result.Outcome != app.ArchivingCompleted {
-		t.Fatalf("expected completed outcome for attempted archiving, got %v", result.Outcome)
+	if result.Outcome != app.SheddingCompleted {
+		t.Fatalf("expected completed outcome for attempted shedding, got %v", result.Outcome)
 	}
 	for _, notWant := range []string{"Cancelled", "moved to", "Preflight failure:"} {
 		if strings.Contains(output.String(), notWant) {
@@ -170,43 +170,43 @@ func TestRunnerReturnsCancelledOutcomeForAllCancelKeys(t *testing.T) {
 		result, err := (Runner{
 			Input:  strings.NewReader(input),
 			Output: new(bytes.Buffer),
-		}).RunArchiving(ctx, testArchivingRequest())
+		}).RunShedding(ctx, testSheddingRequest())
 		if err != nil {
 			t.Fatalf("expected no error for input %q, got %v", input, err)
 		}
-		if result.Outcome != app.ArchivingCancelled {
+		if result.Outcome != app.SheddingCancelled {
 			t.Fatalf("expected cancelled outcome for input %q, got %v", input, result.Outcome)
 		}
 	}
 }
 
-func TestArchivingModelClearsManagedViewAfterMove(t *testing.T) {
+func TestSheddingModelClearsManagedViewAfterMove(t *testing.T) {
 	bucket := filepath.Join("C:", "Users", "pavel", "Shed")
-	initialModel := newModel(context.Background(), testArchivingRequest())
+	initialModel := newModel(context.Background(), testSheddingRequest())
 	initialModel.phase = phaseMoving
 
-	updated, _ := initialModel.Update(moveFinishedMsg{summary: core.MoveSummary{MovedSize: 10, ArchiveBucket: bucket}})
-	archiving := updated.(model)
-	view := archiving.View().Content
+	updated, _ := initialModel.Update(moveFinishedMsg{summary: core.MoveSummary{MovedSize: 10, ShedBucket: bucket}})
+	shedding := updated.(model)
+	view := shedding.View().Content
 
-	if archiving.phase != phaseFinal {
-		t.Fatalf("expected final phase, got %v", archiving.phase)
+	if shedding.phase != phaseFinal {
+		t.Fatalf("expected final phase, got %v", shedding.phase)
 	}
 	if view != "" {
 		t.Fatalf("expected final phase to clear managed view, got %q", view)
 	}
 }
 
-func TestArchivingModelRendersPreflightFailureAfterMoveError(t *testing.T) {
-	initialModel := newModel(context.Background(), testArchivingRequest())
+func TestSheddingModelRendersPreflightFailureAfterMoveError(t *testing.T) {
+	initialModel := newModel(context.Background(), testSheddingRequest())
 	initialModel.phase = phaseMoving
 
 	updated, _ := initialModel.Update(moveFinishedMsg{err: errors.New("selected folder unavailable")})
-	archiving := updated.(model)
-	view := archiving.View().Content
+	shedding := updated.(model)
+	view := shedding.View().Content
 
-	if archiving.phase != phasePreflightFailure {
-		t.Fatalf("expected preflight failure phase, got %v", archiving.phase)
+	if shedding.phase != phasePreflightFailure {
+		t.Fatalf("expected preflight failure phase, got %v", shedding.phase)
 	}
 	if view != "" {
 		t.Fatalf("expected preflight failure phase to clear managed view, got %q", view)
@@ -280,13 +280,13 @@ func TestMovingModelRendersSpinnerState(t *testing.T) {
 	}, app.MoveViewData{})
 
 	view := model.View().Content
-	if !strings.Contains(view, "Moving items into Archive") {
+	if !strings.Contains(view, "Moving items into Shed") {
 		t.Fatalf("expected moving view, got %q", view)
 	}
 }
 
-func testArchivingRequest() app.ArchivingRequest {
-	return app.ArchivingRequest{
+func testSheddingRequest() app.SheddingRequest {
+	return app.SheddingRequest{
 		Confirmation: testRequest(),
 		Move: func(context.Context) (core.MoveSummary, error) {
 			return core.MoveSummary{}, nil
@@ -297,9 +297,9 @@ func testArchivingRequest() app.ArchivingRequest {
 
 func testRequest() app.ConfirmationRequest {
 	return app.ConfirmationRequest{
-		SelectedFolder:       `C:\Users\pavel\Downloads`,
-		HeaderTitle:          "Downloads",
-		CompactArchiveBucket: filepath.Join("~", "Shed", "2026", "05", "Downloads"),
+		SelectedFolder:    `C:\Users\pavel\Downloads`,
+		HeaderTitle:       "Downloads",
+		CompactShedBucket: filepath.Join("~", "Shed", "2026", "05", "Downloads"),
 		ScanResult: core.ScanResult{
 			StaleItems: []core.StaleItem{
 				{DisplayName: "old-folder", Path: `C:\Users\pavel\Downloads\old-folder`, Kind: core.FolderItem, MoveSize: 2048},

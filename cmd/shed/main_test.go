@@ -10,7 +10,7 @@ import (
 	"shed/internal/app"
 )
 
-func TestRunValidatesCLIBeforeArchiveRoot(t *testing.T) {
+func TestRunValidatesCLIBeforeShedRoot(t *testing.T) {
 	cases := []struct {
 		name                string
 		args                []string
@@ -32,7 +32,7 @@ func TestRunValidatesCLIBeforeArchiveRoot(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			stderr := new(bytes.Buffer)
-			archiveRootCalled := false
+			shedRootCalled := false
 
 			code := run(
 				context.Background(),
@@ -42,8 +42,8 @@ func TestRunValidatesCLIBeforeArchiveRoot(t *testing.T) {
 				stderr,
 				func() bool { return tc.unsupportedPlatform },
 				func() (string, error) {
-					archiveRootCalled = true
-					return "", errors.New("archive root should not be requested")
+					shedRootCalled = true
+					return "", errors.New("shed root should not be requested")
 				},
 			)
 
@@ -53,14 +53,14 @@ func TestRunValidatesCLIBeforeArchiveRoot(t *testing.T) {
 			if stderr.String() != tc.wantStderr {
 				t.Fatalf("expected stderr %q, got %q", tc.wantStderr, stderr.String())
 			}
-			if archiveRootCalled {
-				t.Fatalf("expected no archive root lookup before CLI validation")
+			if shedRootCalled {
+				t.Fatalf("expected no shed root lookup before CLI validation")
 			}
 		})
 	}
 }
 
-func TestRunReportsArchiveRootError(t *testing.T) {
+func TestRunReportsShedRootError(t *testing.T) {
 	stderr := new(bytes.Buffer)
 
 	code := run(
@@ -76,7 +76,7 @@ func TestRunReportsArchiveRootError(t *testing.T) {
 	if code != app.ExitError {
 		t.Fatalf("expected exit error, got %d", code)
 	}
-	if stderr.String() != "Archive path unavailable: home missing\n" {
+	if stderr.String() != "Shed path unavailable: home missing\n" {
 		t.Fatalf("unexpected stderr: %q", stderr.String())
 	}
 }

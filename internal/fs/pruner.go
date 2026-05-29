@@ -15,19 +15,19 @@ import (
 )
 
 type Pruner struct {
-	ArchiveRoot string
-	Now         func() time.Time
-	ReadDir     func(path string) ([]os.DirEntry, error)
-	Size        func(path string) (int64, error)
-	Throw       func(path string) error
+	ShedRoot string
+	Now      func() time.Time
+	ReadDir  func(path string) ([]os.DirEntry, error)
+	Size     func(path string) (int64, error)
+	Throw    func(path string) error
 }
 
-func NewPruner(archiveRoot string) Pruner {
+func NewPruner(shedRoot string) Pruner {
 	return Pruner{
-		ArchiveRoot: archiveRoot,
-		Now:         time.Now,
-		ReadDir:     os.ReadDir,
-		Size:        RecursiveSize,
+		ShedRoot: shedRoot,
+		Now:      time.Now,
+		ReadDir:  os.ReadDir,
+		Size:     RecursiveSize,
 		Throw: func(path string) error {
 			return trash.Throw(path)
 		},
@@ -37,14 +37,14 @@ func NewPruner(archiveRoot string) Pruner {
 func (pruner Pruner) Scan(ctx context.Context) (core.PruneScanResult, error) {
 	pruner = pruner.withDefaults()
 
-	if _, err := os.Stat(pruner.ArchiveRoot); err != nil {
+	if _, err := os.Stat(pruner.ShedRoot); err != nil {
 		if os.IsNotExist(err) {
 			return core.PruneScanResult{}, nil
 		}
 		return core.PruneScanResult{}, err
 	}
 
-	yearEntries, err := pruner.ReadDir(pruner.ArchiveRoot)
+	yearEntries, err := pruner.ReadDir(pruner.ShedRoot)
 	if err != nil {
 		return core.PruneScanResult{}, err
 	}
@@ -65,7 +65,7 @@ func (pruner Pruner) Scan(ctx context.Context) (core.PruneScanResult, error) {
 			continue
 		}
 
-		yearPath := filepath.Join(pruner.ArchiveRoot, yearEntry.Name())
+		yearPath := filepath.Join(pruner.ShedRoot, yearEntry.Name())
 		monthEntries, err := pruner.ReadDir(yearPath)
 		if err != nil {
 			scanErrors = append(scanErrors, fmt.Errorf("scan year %s: %w", yearPath, err))
@@ -93,7 +93,7 @@ func (pruner Pruner) Scan(ctx context.Context) (core.PruneScanResult, error) {
 			}
 
 			candidates = append(candidates, core.PruneCandidate{
-				Month: core.ArchiveMonth{
+				Month: core.ShedMonth{
 					Path:  filepath.Join("~", "Shed", yearEntry.Name(), monthEntry.Name()),
 					Year:  year,
 					Month: month,
@@ -119,7 +119,7 @@ func (pruner Pruner) Prune(ctx context.Context, scan core.PruneScanResult) (core
 			return summary, err
 		}
 
-		monthPath := filepath.Join(pruner.ArchiveRoot, fmt.Sprintf("%04d", candidate.Month.Year), fmt.Sprintf("%02d", candidate.Month.Month))
+		monthPath := filepath.Join(pruner.ShedRoot, fmt.Sprintf("%04d", candidate.Month.Year), fmt.Sprintf("%02d", candidate.Month.Month))
 		if err := pruner.Throw(monthPath); err != nil {
 			summary.RecordFailed(candidate.Month.Path)
 			continue

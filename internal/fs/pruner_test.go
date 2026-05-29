@@ -12,10 +12,10 @@ import (
 	"shed/internal/core"
 )
 
-func TestPrunerScanMissingArchiveRootIsNoOpAndDoesNotCreateIt(t *testing.T) {
-	archiveRoot := filepath.Join(t.TempDir(), "Shed")
+func TestPrunerScanMissingShedRootIsNoOpAndDoesNotCreateIt(t *testing.T) {
+	shedRoot := filepath.Join(t.TempDir(), "Shed")
 	pruner := Pruner{
-		ArchiveRoot: archiveRoot,
+		ShedRoot: shedRoot,
 		Now: func() time.Time {
 			return time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
 		},
@@ -28,28 +28,28 @@ func TestPrunerScanMissingArchiveRootIsNoOpAndDoesNotCreateIt(t *testing.T) {
 	if len(result.Candidates) != 0 {
 		t.Fatalf("expected no candidates, got %d", len(result.Candidates))
 	}
-	if _, err := os.Stat(archiveRoot); !os.IsNotExist(err) {
-		t.Fatalf("expected Archive root to stay missing, stat err: %v", err)
+	if _, err := os.Stat(shedRoot); !os.IsNotExist(err) {
+		t.Fatalf("expected Shed root to stay missing, stat err: %v", err)
 	}
 }
 
 func TestPrunerScanFindsEligibleMonthsWithCalculatedSizes(t *testing.T) {
 	now := time.Date(2026, 5, 15, 0, 0, 0, 0, time.UTC)
-	archiveRoot := t.TempDir()
+	shedRoot := t.TempDir()
 
-	createDir(t, filepath.Join(archiveRoot, "2025", "10"))
-	createDir(t, filepath.Join(archiveRoot, "2025", "11"))
-	createDir(t, filepath.Join(archiveRoot, "2026", "01"))
+	createDir(t, filepath.Join(shedRoot, "2025", "10"))
+	createDir(t, filepath.Join(shedRoot, "2025", "11"))
+	createDir(t, filepath.Join(shedRoot, "2026", "01"))
 
 	sizes := map[string]int64{
-		filepath.Join(archiveRoot, "2025", "10"): 100,
-		filepath.Join(archiveRoot, "2025", "11"): 110,
-		filepath.Join(archiveRoot, "2026", "01"): 10,
+		filepath.Join(shedRoot, "2025", "10"): 100,
+		filepath.Join(shedRoot, "2025", "11"): 110,
+		filepath.Join(shedRoot, "2026", "01"): 10,
 	}
 
 	pruner := Pruner{
-		ArchiveRoot: archiveRoot,
-		Now:         func() time.Time { return now },
+		ShedRoot: shedRoot,
+		Now:      func() time.Time { return now },
 		Size: func(path string) (int64, error) {
 			return sizes[path], nil
 		},
@@ -70,22 +70,22 @@ func TestPrunerScanFindsEligibleMonthsWithCalculatedSizes(t *testing.T) {
 	}
 }
 
-func TestPrunerScanIgnoresInvalidArchiveStructure(t *testing.T) {
+func TestPrunerScanIgnoresInvalidShedStructure(t *testing.T) {
 	now := time.Date(2026, 5, 15, 0, 0, 0, 0, time.UTC)
-	archiveRoot := t.TempDir()
+	shedRoot := t.TempDir()
 
-	createDir(t, filepath.Join(archiveRoot, "tmp"))
-	createDir(t, filepath.Join(archiveRoot, "2025", "ab"))
-	createDir(t, filepath.Join(archiveRoot, "2025", "13"))
-	createDir(t, filepath.Join(archiveRoot, "2025", "1"))
-	createDir(t, filepath.Join(archiveRoot, "2025", "09", "nested"))
-	writePrunerFile(t, filepath.Join(archiveRoot, "2025", "07.txt"), "not a month directory")
+	createDir(t, filepath.Join(shedRoot, "tmp"))
+	createDir(t, filepath.Join(shedRoot, "2025", "ab"))
+	createDir(t, filepath.Join(shedRoot, "2025", "13"))
+	createDir(t, filepath.Join(shedRoot, "2025", "1"))
+	createDir(t, filepath.Join(shedRoot, "2025", "09", "nested"))
+	writePrunerFile(t, filepath.Join(shedRoot, "2025", "07.txt"), "not a month directory")
 
 	pruner := Pruner{
-		ArchiveRoot: archiveRoot,
-		Now:         func() time.Time { return now },
+		ShedRoot: shedRoot,
+		Now:      func() time.Time { return now },
 		Size: func(path string) (int64, error) {
-			if path == filepath.Join(archiveRoot, "2025", "09") {
+			if path == filepath.Join(shedRoot, "2025", "09") {
 				return 9, nil
 			}
 			return 0, nil
@@ -106,16 +106,16 @@ func TestPrunerScanIgnoresInvalidArchiveStructure(t *testing.T) {
 
 func TestPrunerScanReportsSizeFailures(t *testing.T) {
 	now := time.Date(2026, 5, 15, 0, 0, 0, 0, time.UTC)
-	archiveRoot := t.TempDir()
-	bad := filepath.Join(archiveRoot, "2025", "10")
-	good := filepath.Join(archiveRoot, "2025", "09")
+	shedRoot := t.TempDir()
+	bad := filepath.Join(shedRoot, "2025", "10")
+	good := filepath.Join(shedRoot, "2025", "09")
 
 	createDir(t, bad)
 	createDir(t, good)
 
 	pruner := Pruner{
-		ArchiveRoot: archiveRoot,
-		Now:         func() time.Time { return now },
+		ShedRoot: shedRoot,
+		Now:      func() time.Time { return now },
 		Size: func(path string) (int64, error) {
 			if path == bad {
 				return 0, errors.New("boom")
@@ -134,24 +134,24 @@ func TestPrunerScanReportsSizeFailures(t *testing.T) {
 }
 
 func TestPrunerPruneCallsRecycleBinPerCandidateAndContinuesAfterFailures(t *testing.T) {
-	archiveRoot := t.TempDir()
+	shedRoot := t.TempDir()
 
 	scan := core.PruneScanResult{
 		Candidates: []core.PruneCandidate{
-			{Month: core.ArchiveMonth{Path: filepath.Join("~", "Shed", "2024", "01"), Year: 2024, Month: 1}, Size: 10},
-			{Month: core.ArchiveMonth{Path: filepath.Join("~", "Shed", "2024", "02"), Year: 2024, Month: 2}, Size: 20},
+			{Month: core.ShedMonth{Path: filepath.Join("~", "Shed", "2024", "01"), Year: 2024, Month: 1}, Size: 10},
+			{Month: core.ShedMonth{Path: filepath.Join("~", "Shed", "2024", "02"), Year: 2024, Month: 2}, Size: 20},
 		},
 	}
 
 	var calls []string
 	pruner := Pruner{
-		ArchiveRoot: archiveRoot,
+		ShedRoot: shedRoot,
 		ReadDir: func(string) ([]os.DirEntry, error) {
 			return []os.DirEntry{fakeDirEntry{name: "x", dir: true}}, nil
 		},
 		Throw: func(path string) error {
 			calls = append(calls, path)
-			if path == filepath.Join(archiveRoot, "2024", "01") {
+			if path == filepath.Join(shedRoot, "2024", "01") {
 				return errors.New("locked")
 			}
 			return nil
@@ -178,20 +178,20 @@ func TestPrunerPruneCallsRecycleBinPerCandidateAndContinuesAfterFailures(t *test
 }
 
 func TestPrunerPruneCleansUpEmptyYearBestEffortWithoutSummaryItem(t *testing.T) {
-	archiveRoot := t.TempDir()
+	shedRoot := t.TempDir()
 
 	scan := core.PruneScanResult{
 		Candidates: []core.PruneCandidate{
-			{Month: core.ArchiveMonth{Path: filepath.Join("~", "Shed", "2024", "01"), Year: 2024, Month: 1}, Size: 10},
+			{Month: core.ShedMonth{Path: filepath.Join("~", "Shed", "2024", "01"), Year: 2024, Month: 1}, Size: 10},
 		},
 	}
 
-	monthPath := filepath.Join(archiveRoot, "2024", "01")
-	yearPath := filepath.Join(archiveRoot, "2024")
+	monthPath := filepath.Join(shedRoot, "2024", "01")
+	yearPath := filepath.Join(shedRoot, "2024")
 	var calls []string
 
 	pruner := Pruner{
-		ArchiveRoot: archiveRoot,
+		ShedRoot: shedRoot,
 		ReadDir: func(path string) ([]os.DirEntry, error) {
 			if path == yearPath {
 				return nil, nil

@@ -14,10 +14,10 @@ func HeaderTitle(selectedFolder string) string {
 	return filepath.Base(clean)
 }
 
-func CompactArchiveBucket(moveDate time.Time, selectedFolder string) string {
+func CompactShedBucket(moveDate time.Time, selectedFolder string) string {
 	return filepath.Join("~", "Shed", fmt.Sprintf("%04d", moveDate.Year()), fmt.Sprintf("%02d", int(moveDate.Month())), HeaderTitle(selectedFolder))
 }
 
-func ArchiveBucket(archiveRoot string, moveDate time.Time, selectedFolder string) string {
-	return filepath.Join(archiveRoot, fmt.Sprintf("%04d", moveDate.Year()), fmt.Sprintf("%02d", int(moveDate.Month())), HeaderTitle(selectedFolder))
+func ShedBucket(shedRoot string, moveDate time.Time, selectedFolder string) string {
+	return filepath.Join(shedRoot, fmt.Sprintf("%04d", moveDate.Year()), fmt.Sprintf("%02d", int(moveDate.Month())), HeaderTitle(selectedFolder))
 }

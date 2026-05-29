@@ -22,23 +22,23 @@ func TestHeaderTitleUsesCleanPathForFilesystemRoot(t *testing.T) {
 	}
 }
 
-func TestCompactArchiveBucket(t *testing.T) {
+func TestCompactShedBucket(t *testing.T) {
 	selected := filepath.Join("C:", "Users", "pavel", "Downloads")
 	moveDate := time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)
 	want := filepath.Join("~", "Shed", "2026", "05", "Downloads")
 
-	if got := CompactArchiveBucket(moveDate, selected); got != want {
+	if got := CompactShedBucket(moveDate, selected); got != want {
 		t.Fatalf("expected compact bucket %q, got %q", want, got)
 	}
 }
 
-func TestArchiveBucketUsesArchiveRootDateAndSelectedFolderBaseName(t *testing.T) {
-	archiveRoot := filepath.Join("C:", "Users", "pavel", "Shed")
+func TestShedBucketUsesShedRootDateAndSelectedFolderBaseName(t *testing.T) {
+	shedRoot := filepath.Join("C:", "Users", "pavel", "Shed")
 	selected := filepath.Join("D:", "Scratch", "Downloads")
 	moveDate := time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)
-	want := filepath.Join(archiveRoot, "2026", "05", "Downloads")
+	want := filepath.Join(shedRoot, "2026", "05", "Downloads")
 
-	if got := ArchiveBucket(archiveRoot, moveDate, selected); got != want {
+	if got := ShedBucket(shedRoot, moveDate, selected); got != want {
 		t.Fatalf("expected bucket %q, got %q", want, got)
 	}
 }
@@ -53,11 +53,11 @@ func TestHasNameConflictUsesCaseInsensitiveWindowsSemantics(t *testing.T) {
 
 func TestResolveNumberedNamePlacesSuffixBeforeFinalExtension(t *testing.T) {
 	tests := map[string]string{
-		"report.pdf":     "report (2).pdf",
-		"archive.tar.gz": "archive.tar (1).gz",
-		"README":         "README (1)",
+		"report.pdf":    "report (2).pdf",
+		"bundle.tar.gz": "bundle.tar (1).gz",
+		"README":        "README (1)",
 	}
-	existing := []string{"report.pdf", "report (1).pdf", "archive.tar.gz", "README"}
+	existing := []string{"report.pdf", "report (1).pdf", "bundle.tar.gz", "README"}
 
 	for name, want := range tests {
 		if got := ResolveNumberedName(existing, name); got != want {
@@ -68,8 +68,8 @@ func TestResolveNumberedNamePlacesSuffixBeforeFinalExtension(t *testing.T) {
 
 func TestMoveSummaryStoresActualMovedSize(t *testing.T) {
 	summary := MoveSummary{
-		ArchiveBucket: filepath.Join("C:", "Users", "pavel", "Shed", "2026", "05", "Downloads"),
-		MovedSize:     12,
+		ShedBucket: filepath.Join("C:", "Users", "pavel", "Shed", "2026", "05", "Downloads"),
+		MovedSize:  12,
 	}
 
 	if summary.MovedSize != 12 {

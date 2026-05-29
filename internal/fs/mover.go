@@ -13,14 +13,14 @@ import (
 )
 
 type Mover struct {
-	ArchiveRoot string
-	Now         func() time.Time
+	ShedRoot string
+	Now      func() time.Time
 }
 
-func NewMover(archiveRoot string) Mover {
+func NewMover(shedRoot string) Mover {
 	return Mover{
-		ArchiveRoot: archiveRoot,
-		Now:         time.Now,
+		ShedRoot: shedRoot,
+		Now:      time.Now,
 	}
 }
 
@@ -29,9 +29,9 @@ func (mover Mover) Move(ctx context.Context, selectedFolder string, scan core.Sc
 		mover.Now = time.Now
 	}
 
-	bucket := core.ArchiveBucket(mover.ArchiveRoot, mover.Now(), selectedFolder)
-	if err := preflight(selectedFolder, mover.ArchiveRoot, bucket); err != nil {
-		return core.MoveSummary{ArchiveBucket: bucket}, err
+	bucket := core.ShedBucket(mover.ShedRoot, mover.Now(), selectedFolder)
+	if err := preflight(selectedFolder, mover.ShedRoot, bucket); err != nil {
+		return core.MoveSummary{ShedBucket: bucket}, err
 	}
 
 	summary := core.NewMoveSummary(bucket)
@@ -46,14 +46,14 @@ func (mover Mover) Move(ctx context.Context, selectedFolder string, scan core.Sc
 	return summary, nil
 }
 
-func preflight(selectedFolder, archiveRoot, bucket string) error {
+func preflight(selectedFolder, shedRoot, bucket string) error {
 	if err := requireDirectory(selectedFolder, "selected folder"); err != nil {
 		return err
 	}
-	if err := ensureDirectory(archiveRoot, "Archive"); err != nil {
+	if err := ensureDirectory(shedRoot, "Shed"); err != nil {
 		return err
 	}
-	if err := ensureDirectory(bucket, "Archive bucket"); err != nil {
+	if err := ensureDirectory(bucket, "Shed bucket"); err != nil {
 		return err
 	}
 	return nil
@@ -88,10 +88,10 @@ func ensureDirectory(path, label string) error {
 }
 
 func moveRootItem(item core.StaleItem, bucket string, summary *core.MoveSummary) {
-	decision := core.DecideArchiveMove(core.ArchiveMoveCandidate{
+	decision := core.DecideShedMove(core.ShedMoveCandidate{
 		Name: item.DisplayName,
 		Kind: item.Kind,
-	}, archiveEntries(bucket))
+	}, shedEntries(bucket))
 	target := filepath.Join(bucket, decision.TargetName)
 	if decision.Action == core.MergeIntoExistingFolder {
 		mergeFolder(item.Path, target, summary)
@@ -128,10 +128,10 @@ func mergeFolder(source, target string, summary *core.MoveSummary) {
 		} else if info.IsDir() {
 			kind = core.FolderItem
 		}
-		decision := core.DecideArchiveMove(core.ArchiveMoveCandidate{
+		decision := core.DecideShedMove(core.ShedMoveCandidate{
 			Name: entry.Name(),
 			Kind: kind,
-		}, archiveEntries(target))
+		}, shedEntries(target))
 		targetPath := filepath.Join(target, decision.TargetName)
 
 		if decision.Action == core.MergeIntoExistingFolder {
@@ -167,12 +167,12 @@ func mergeFolder(source, target string, summary *core.MoveSummary) {
 	_ = os.Remove(source)
 }
 
-func archiveEntries(dir string) []core.ArchiveMoveEntry {
+func shedEntries(dir string) []core.ShedMoveEntry {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil
 	}
-	moveEntries := make([]core.ArchiveMoveEntry, 0, len(entries))
+	moveEntries := make([]core.ShedMoveEntry, 0, len(entries))
 	for _, entry := range entries {
 		kind := core.FileItem
 		if entry.Type()&os.ModeSymlink != 0 {
@@ -180,7 +180,7 @@ func archiveEntries(dir string) []core.ArchiveMoveEntry {
 		} else if entry.IsDir() {
 			kind = core.FolderItem
 		}
-		moveEntries = append(moveEntries, core.ArchiveMoveEntry{
+		moveEntries = append(moveEntries, core.ShedMoveEntry{
 			Name: entry.Name(),
 			Kind: kind,
 		})

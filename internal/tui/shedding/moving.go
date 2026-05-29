@@ -1,4 +1,4 @@
-package archiving
+package shedding
 
 import (
 	"context"
@@ -58,5 +58,5 @@ func (m movingModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m movingModel) View() tea.View {
-	return tea.NewView(m.spinner.View() + " Moving items into Archive")
+	return tea.NewView(m.spinner.View() + " Moving items into Shed")
 }

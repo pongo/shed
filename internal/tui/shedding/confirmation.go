@@ -1,4 +1,4 @@
-package archiving
+package shedding
 
 import (
 	"fmt"
@@ -155,7 +155,7 @@ func headerView(title string) string {
 }
 
 func summaryView(request app.ConfirmationRequest) string {
-	summary := fmt.Sprintf("%s will be moved to %s. Press y/enter to confirm.", core.FormatSize(request.ScanResult.MoveSize), request.CompactArchiveBucket)
+	summary := fmt.Sprintf("%s will be moved to %s. Press y/enter to confirm.", core.FormatSize(request.ScanResult.MoveSize), request.CompactShedBucket)
 	if skipped := len(request.ScanResult.SkippedItems); skipped > 0 {
 		summary = fmt.Sprintf("%s Skipped items: %d.", summary, skipped)
 	}

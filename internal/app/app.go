@@ -15,17 +15,17 @@ const (
 )
 
 type Options struct {
-	Args      []string
-	Stdout    io.Writer
-	Stderr    io.Writer
-	Resolver  SelectedFolderResolver
-	Pruner    Pruner
-	Pruning   PruningRunner
-	Scanner   Scanner
-	Mover     Mover
-	Archiving ArchivingRunner
-	Final     FinalRunner
-	Now       func() time.Time
+	Args     []string
+	Stdout   io.Writer
+	Stderr   io.Writer
+	Resolver SelectedFolderResolver
+	Pruner   Pruner
+	Pruning  PruningRunner
+	Scanner  Scanner
+	Mover    Mover
+	Shedding SheddingRunner
+	Final    FinalRunner
+	Now      func() time.Time
 }
 
 type SelectedFolderResolver interface {
@@ -47,8 +47,8 @@ type Pruner interface {
 type MoveFunc func(ctx context.Context) (core.MoveSummary, error)
 type PruneFunc func(ctx context.Context) (core.PruneSummary, error)
 
-type ArchivingRunner interface {
-	RunArchiving(ctx context.Context, request ArchivingRequest) (ArchivingResult, error)
+type SheddingRunner interface {
+	RunShedding(ctx context.Context, request SheddingRequest) (SheddingResult, error)
 }
 
 type PruningRunner interface {
@@ -58,14 +58,14 @@ type FinalRunner interface {
 	RunFinal(ctx context.Context, request FinalSummaryRequest) error
 }
 
-type ArchivingRequest struct {
+type SheddingRequest struct {
 	Confirmation ConfirmationRequest
 	Move         MoveFunc
 	View         MoveViewData
 }
 
-type ArchivingResult struct {
-	Outcome ArchivingOutcome
+type SheddingResult struct {
+	Outcome SheddingOutcome
 	Summary core.MoveSummary
 }
 
@@ -80,8 +80,8 @@ type PruningResult struct {
 }
 
 type FinalSummaryRequest struct {
-	Pruning   PruningFinalData
-	Archiving ArchivingFinalData
+	Pruning  PruningFinalData
+	Shedding SheddingFinalData
 }
 
 type PruningFinalData struct {
@@ -91,7 +91,7 @@ type PruningFinalData struct {
 	Err           error
 }
 
-type ArchivingFinalData struct {
+type SheddingFinalData struct {
 	Show          bool
 	NothingToMove bool
 	Summary       core.MoveSummary
@@ -105,17 +105,17 @@ type MoveViewData struct {
 }
 
 type ConfirmationRequest struct {
-	SelectedFolder       string
-	HeaderTitle          string
-	CompactArchiveBucket string
-	ScanResult           core.ScanResult
+	SelectedFolder    string
+	HeaderTitle       string
+	CompactShedBucket string
+	ScanResult        core.ScanResult
 }
 
-type ArchivingOutcome int
+type SheddingOutcome int
 
 const (
-	ArchivingCancelled ArchivingOutcome = iota
-	ArchivingCompleted
+	SheddingCancelled SheddingOutcome = iota
+	SheddingCompleted
 )
 
 type PruningOutcome int
@@ -157,9 +157,9 @@ func Run(ctx context.Context, opts Options) int {
 		return ExitOK
 	}
 
-	archiving := runArchivingPhase(ctx, opts, selectedFolder, pruning)
+	shedding := runSheddingPhase(ctx, opts, selectedFolder, pruning)
 
-	return runFinalPhase(ctx, opts, pruning, archiving)
+	return runFinalPhase(ctx, opts, pruning, shedding)
 }
 
 func withDefaults(opts Options) Options {
@@ -184,8 +184,8 @@ func withDefaults(opts Options) Options {
 	if opts.Pruning == nil {
 		opts.Pruning = passthroughPruningRunner{}
 	}
-	if opts.Archiving == nil {
-		opts.Archiving = passthroughArchivingRunner{}
+	if opts.Shedding == nil {
+		opts.Shedding = passthroughSheddingRunner{}
 	}
 	if opts.Final == nil {
 		opts.Final = noopFinalRunner{}
@@ -202,12 +202,12 @@ func (missingMover) Move(context.Context, string, core.ScanResult) (core.MoveSum
 	return core.MoveSummary{}, fmt.Errorf("mover is not configured")
 }
 
-type passthroughArchivingRunner struct{}
+type passthroughSheddingRunner struct{}
 
-func (passthroughArchivingRunner) RunArchiving(ctx context.Context, request ArchivingRequest) (ArchivingResult, error) {
+func (passthroughSheddingRunner) RunShedding(ctx context.Context, request SheddingRequest) (SheddingResult, error) {
 	summary, err := request.Move(ctx)
-	return ArchivingResult{
-		Outcome: ArchivingCompleted,
+	return SheddingResult{
+		Outcome: SheddingCompleted,
 		Summary: summary,
 	}, err
 }

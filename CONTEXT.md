@@ -1,39 +1,43 @@
 # shed
 
-This context describes the language of shed, a Windows-only console utility for moving stale root items from a selected folder into an archive.
+This context describes the language of shed, a Windows-only console utility for moving stale root items from a selected folder into the Shed.
 
 ## Language
 
 **shed**:
-A console utility that finds stale root items in a selected folder and moves them into the **Archive**.
+A console utility that finds stale root items in a selected folder and moves them into the **Shed**.
 _Avoid_: Shed, cleaner
 
-**Archive**:
-The root folder `~\Shed` where **shed** stores moved items, with `~` resolved to the current user's home directory. The Archive contains one or more **Archive buckets**.
-_Avoid_: Shed Archive, destination
+**Shed**:
+The root folder `~\Shed` where **shed** stores moved items, with `~` resolved to the current user's home directory. The Shed contains one or more **Shed buckets**.
+_Avoid_: Archive, Shed Archive, destination
 
-**Archive source**:
-The **Archive** itself or any folder inside the Archive when used as the selected folder. shed never moves items from an Archive source.
-_Avoid_: Self archive
+**Shed source**:
+The **Shed** itself or any folder inside the Shed when used as the selected folder. shed never moves items from a Shed source.
+_Avoid_: Archive source, Self archive
 
-**Archive bucket**:
-A folder inside the **Archive** for items moved from a selected folder name during a calendar month, shaped as `~\Shed\<yyyy>\<MM>\<source-folder-name>`.
-_Avoid_: Archive destination
+**Shed bucket**:
+A folder inside the **Shed** for items moved from a selected folder name during a calendar month, shaped as `~\Shed\<yyyy>\<MM>\<source-folder-name>`.
+_Avoid_: Archive bucket, archive destination
 
-**Archive month**:
-A calendar-month folder inside the **Archive**, shaped as `~\Shed\<yyyy>\<MM>`, containing zero or more **Archive buckets**. Its age is determined only from its `<yyyy>\<MM>` path components.
-_Avoid_: Archive month bucket, monthly bucket
+**Shed month**:
+A calendar-month folder inside the **Shed**, shaped as `~\Shed\<yyyy>\<MM>`, containing zero or more **Shed buckets**. Its age is determined only from its `<yyyy>\<MM>` path components.
+_Avoid_: Archive month, monthly bucket
 
-**Archive pruning**:
-The cleanup step that sends **Archive months** older than six months to the Recycle Bin. If a year folder becomes empty after pruning, shed also sends that year folder to the Recycle Bin.
-_Avoid_: Archive cleanup, pruning
+**Shed pruning**:
+The cleanup step that sends **Shed months** older than six months to the Recycle Bin. If a year folder becomes empty after pruning, shed also sends that year folder to the Recycle Bin.
+_Avoid_: Archive pruning, Archive cleanup, pruning
 
-**Archived item**:
-A file, folder, or symlink that has been moved into an **Archive bucket**.
-_Avoid_: Moved file, cleaned item
+**Shedding**:
+The phase that moves confirmed **Stale items** from the **Selected folder** into a **Shed bucket**.
+_Avoid_: Archiving
+
+**Shed item**:
+A file, folder, or symlink that has been moved into a **Shed bucket**.
+_Avoid_: Archived item, moved file, cleaned item
 
 **Failed move**:
-An attempted move that did not complete after the user confirmed archiving. For a partial **Merge**, the Failed move path is the specific nested item path that failed, not the top-level **Stale item** folder. Failed moves do not roll back successful moves.
+An attempted move that did not complete after the user confirmed **Shedding**. For a partial **Merge**, the Failed move path is the specific nested item path that failed, not the top-level **Stale item** folder. Failed moves do not roll back successful moves.
 _Avoid_: Transaction failure
 
 **Move size**:
@@ -41,11 +45,11 @@ The total byte size that stale items will remove from the selected folder. It in
 _Avoid_: Archive growth, disk growth
 
 **Move summary**:
-The final report after archiving completes, containing the actual size successfully moved, the **Archive bucket** path, and any **Failed move** paths. A successful folder rename may add that folder's full **Move size** at once; a partial **Merge** adds only the sizes of nested items that moved successfully.
+The final report after **Shedding** completes, containing the actual size successfully moved, the **Shed bucket** path, and any **Failed move** paths. A successful folder rename may add that folder's full **Move size** at once; a partial **Merge** adds only the sizes of nested items that moved successfully.
 _Avoid_: Move log
 
 **Prune summary**:
-The final report after confirmed **Archive pruning**, containing the actual size sent to the Recycle Bin, the pruned **Archive month** paths, and any failed prune paths.
+The final report after confirmed **Shed pruning**, containing the actual size sent to the Recycle Bin, the pruned **Shed month** paths, and any failed prune paths.
 _Avoid_: Prune log, cleanup summary
 
 **Move order**:
@@ -57,11 +61,11 @@ The root item name shown in the TUI list, without path or metadata.
 _Avoid_: Label with metadata
 
 **Name conflict**:
-A case where a **Root item** being moved has the same name as an existing item in the target **Archive bucket**, compared case-insensitively using Windows name semantics.
+A case where a **Root item** being moved has the same name as an existing item in the target **Shed bucket**, compared case-insensitively using Windows name semantics.
 _Avoid_: Collision
 
 **Nothing to move**:
-The outcome when scanning finds no **Stale items** to offer for archiving.
+The outcome when scanning finds no **Stale items** to offer for **Shedding**.
 _Avoid_: Empty TUI
 
 **Merge**:
@@ -73,7 +77,7 @@ The conflict resolution for files and symlinks with the same name, inserted befo
 _Avoid_: Rename suffix, duplicate suffix
 
 **Preflight failure**:
-A run-level failure detected after confirmation while preparing the **Selected folder**, **Archive**, or **Archive bucket**, before the first attempted move. Errors after the first attempted move are reported as **Failed move** paths.
+A run-level failure detected after confirmation while preparing the **Selected folder**, **Shed**, or **Shed bucket**, before the first attempted move. Errors after the first attempted move are reported as **Failed move** paths.
 _Avoid_: Setup error
 
 **Unsupported platform**:
@@ -89,11 +93,11 @@ A direct child of the selected folder. Items nested inside root folders are not 
 _Avoid_: Entry, child
 
 **Stale item**:
-A **Root item** that is eligible to be moved into the **Archive** because it is at least 60 days old at the retention boundary.
+A **Root item** that is eligible to be moved into the **Shed** because it is at least 60 days old at the retention boundary.
 _Avoid_: Old item, expired item
 
 **Skipped item**:
-A **Root item** that shed does not offer for archiving because it could not read required metadata or calculate **Move size** safely.
+A **Root item** that shed does not offer for **Shedding** because it could not read required metadata or calculate **Move size** safely.
 _Avoid_: Failed item
 
 **Symlink item**:

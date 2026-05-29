@@ -8,9 +8,9 @@ import (
 func TestIsPruneEligibleUsesStrictSixMonthCalendarCutoff(t *testing.T) {
 	now := time.Date(2026, 5, 29, 12, 0, 0, 0, time.UTC)
 
-	eligible := ArchiveMonth{Path: `~\Shed\2025\10`, Year: 2025, Month: 10}
-	boundary := ArchiveMonth{Path: `~\Shed\2025\11`, Year: 2025, Month: 11}
-	recent := ArchiveMonth{Path: `~\Shed\2026\01`, Year: 2026, Month: 1}
+	eligible := ShedMonth{Path: `~\Shed\2025\10`, Year: 2025, Month: 10}
+	boundary := ShedMonth{Path: `~\Shed\2025\11`, Year: 2025, Month: 11}
+	recent := ShedMonth{Path: `~\Shed\2026\01`, Year: 2026, Month: 1}
 
 	if !IsPruneEligible(eligible, now) {
 		t.Fatalf("expected %v to be eligible", eligible)
@@ -27,10 +27,10 @@ func TestSelectPruneCandidatesFiltersAndSortsOldestFirst(t *testing.T) {
 	now := time.Date(2026, 5, 29, 12, 0, 0, 0, time.UTC)
 
 	input := []PruneCandidate{
-		{Month: ArchiveMonth{Path: `~\Shed\2025\12`, Year: 2025, Month: 12}, Size: 12},
-		{Month: ArchiveMonth{Path: `~\Shed\2024\01`, Year: 2024, Month: 1}, Size: 1},
-		{Month: ArchiveMonth{Path: `~\Shed\2025\10`, Year: 2025, Month: 10}, Size: 10},
-		{Month: ArchiveMonth{Path: `~\Shed\2026\02`, Year: 2026, Month: 2}, Size: 2},
+		{Month: ShedMonth{Path: `~\Shed\2025\12`, Year: 2025, Month: 12}, Size: 12},
+		{Month: ShedMonth{Path: `~\Shed\2024\01`, Year: 2024, Month: 1}, Size: 1},
+		{Month: ShedMonth{Path: `~\Shed\2025\10`, Year: 2025, Month: 10}, Size: 10},
+		{Month: ShedMonth{Path: `~\Shed\2026\02`, Year: 2026, Month: 2}, Size: 2},
 	}
 
 	result := SelectPruneCandidates(input, now)

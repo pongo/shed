@@ -8,9 +8,9 @@ import (
 
 	"shed/internal/app"
 	shedfs "shed/internal/fs"
-	"shed/internal/tui/archiving"
 	"shed/internal/tui/final"
 	"shed/internal/tui/pruning"
+	"shed/internal/tui/shedding"
 )
 
 func main() {
@@ -21,7 +21,7 @@ func main() {
 		os.Stdout,
 		os.Stderr,
 		shedfs.UnsupportedPlatform,
-		shedfs.UserArchiveRoot,
+		shedfs.UserShedRoot,
 	))
 }
 
@@ -32,7 +32,7 @@ func run(
 	stdout io.Writer,
 	stderr io.Writer,
 	unsupportedPlatform func() bool,
-	userArchiveRoot func() (string, error),
+	userShedRoot func() (string, error),
 ) int {
 	if unsupportedPlatform() {
 		_, _ = fmt.Fprintln(stderr, "Unsupported platform")
@@ -44,9 +44,9 @@ func run(
 		return app.ExitError
 	}
 
-	archiveRoot, err := userArchiveRoot()
+	shedRoot, err := userShedRoot()
 	if err != nil {
-		_, _ = fmt.Fprintf(stderr, "Archive path unavailable: %v\n", err)
+		_, _ = fmt.Fprintf(stderr, "Shed path unavailable: %v\n", err)
 		return app.ExitError
 	}
 
@@ -55,14 +55,14 @@ func run(
 		Stdout:   stdout,
 		Stderr:   stderr,
 		Resolver: shedfs.SelectedFolderResolver{},
-		Pruner:   shedfs.NewPruner(archiveRoot),
+		Pruner:   shedfs.NewPruner(shedRoot),
 		Pruning: pruning.Runner{
 			Input:  stdin,
 			Output: stdout,
 		},
-		Scanner: shedfs.NewScanner(archiveRoot),
-		Mover:   shedfs.NewMover(archiveRoot),
-		Archiving: archiving.Runner{
+		Scanner: shedfs.NewScanner(shedRoot),
+		Mover:   shedfs.NewMover(shedRoot),
+		Shedding: shedding.Runner{
 			Input:  stdin,
 			Output: stdout,
 		},

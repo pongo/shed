@@ -112,14 +112,14 @@ func SortStaleItems(items []StaleItem) {
 	})
 }
 
-func IsArchiveSource(selectedFolder, archiveRoot string) bool {
+func IsShedSource(selectedFolder, shedRoot string) bool {
 	selected := cleanForCompare(selectedFolder)
-	archive := cleanForCompare(archiveRoot)
-	if selected == archive {
+	shed := cleanForCompare(shedRoot)
+	if selected == shed {
 		return true
 	}
 
-	relative, err := filepath.Rel(archive, selected)
+	relative, err := filepath.Rel(shed, selected)
 	if err != nil {
 		return false
 	}

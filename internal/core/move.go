@@ -6,39 +6,39 @@ import (
 	"strings"
 )
 
-type ArchiveMoveAction int
+type ShedMoveAction int
 
 const (
-	MoveIntoArchive ArchiveMoveAction = iota
+	MoveIntoShed ShedMoveAction = iota
 	MergeIntoExistingFolder
 )
 
-type ArchiveMoveCandidate struct {
+type ShedMoveCandidate struct {
 	Name string
 	Kind ItemKind
 }
 
-type ArchiveMoveEntry struct {
+type ShedMoveEntry struct {
 	Name string
 	Kind ItemKind
 }
 
-type ArchiveMoveDecision struct {
-	Action     ArchiveMoveAction
+type ShedMoveDecision struct {
+	Action     ShedMoveAction
 	TargetName string
 }
 
 type MoveSummary struct {
-	ArchiveBucket string
-	MovedSize     int64
-	FailedPaths   []string
+	ShedBucket  string
+	MovedSize   int64
+	FailedPaths []string
 }
 
-func DecideArchiveMove(candidate ArchiveMoveCandidate, existing []ArchiveMoveEntry) ArchiveMoveDecision {
+func DecideShedMove(candidate ShedMoveCandidate, existing []ShedMoveEntry) ShedMoveDecision {
 	if candidate.Kind == FolderItem {
 		for _, entry := range existing {
 			if entry.Kind == FolderItem && WindowsNameKey(entry.Name) == WindowsNameKey(candidate.Name) {
-				return ArchiveMoveDecision{
+				return ShedMoveDecision{
 					Action:     MergeIntoExistingFolder,
 					TargetName: entry.Name,
 				}
@@ -46,14 +46,14 @@ func DecideArchiveMove(candidate ArchiveMoveCandidate, existing []ArchiveMoveEnt
 		}
 	}
 
-	return ArchiveMoveDecision{
-		Action:     MoveIntoArchive,
+	return ShedMoveDecision{
+		Action:     MoveIntoShed,
 		TargetName: ResolveNumberedName(entryNames(existing), candidate.Name),
 	}
 }
 
-func NewMoveSummary(archiveBucket string) MoveSummary {
-	return MoveSummary{ArchiveBucket: archiveBucket}
+func NewMoveSummary(shedBucket string) MoveSummary {
+	return MoveSummary{ShedBucket: shedBucket}
 }
 
 func (summary *MoveSummary) RecordMoved(size int64) {
@@ -99,7 +99,7 @@ func ResolveNumberedName(existing []string, name string) string {
 	}
 }
 
-func entryNames(entries []ArchiveMoveEntry) []string {
+func entryNames(entries []ShedMoveEntry) []string {
 	names := make([]string, len(entries))
 	for i, entry := range entries {
 		names[i] = entry.Name

@@ -102,24 +102,24 @@ func TestSortStaleItemsFoldersFirstThenCaseInsensitiveNames(t *testing.T) {
 	}
 }
 
-func TestIsArchiveSource(t *testing.T) {
+func TestIsShedSource(t *testing.T) {
 	home := filepath.Join("C:", "Users", "pavel")
-	archive := filepath.Join(home, "Shed")
+	shed := filepath.Join(home, "Shed")
 
 	tests := []struct {
 		name     string
 		selected string
 		want     bool
 	}{
-		{name: "archive root", selected: archive, want: true},
-		{name: "inside archive", selected: filepath.Join(archive, "2026", "05", "Downloads"), want: true},
+		{name: "shed root", selected: shed, want: true},
+		{name: "inside shed", selected: filepath.Join(shed, "2026", "05", "Downloads"), want: true},
 		{name: "sibling", selected: filepath.Join(home, "ShedNotes"), want: false},
 		{name: "outside", selected: filepath.Join(home, "Downloads"), want: false},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := IsArchiveSource(tt.selected, archive); got != tt.want {
+			if got := IsShedSource(tt.selected, shed); got != tt.want {
 				t.Fatalf("expected %v, got %v", tt.want, got)
 			}
 		})

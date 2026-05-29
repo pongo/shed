@@ -21,14 +21,14 @@ func TestFinalSummaryRendersPruningSectionWithSuccessAndFailures(t *testing.T) {
 				FailedPaths: []string{filepath.Join("~", "Shed", "2024", "03")},
 			},
 		},
-		Archiving: app.ArchivingFinalData{
+		Shedding: app.SheddingFinalData{
 			Show:          true,
 			NothingToMove: true,
 		},
 	})
 
 	for _, want := range []string{
-		"Archive pruning",
+		"Shed pruning",
 		"3 KB moved to Recycle Bin",
 		"Pruned: " + filepath.Join("~", "Shed", "2024", "01"),
 		"Pruned: " + filepath.Join("~", "Shed", "2024", "02"),
@@ -47,7 +47,7 @@ func TestFinalSummaryRendersPruningErrors(t *testing.T) {
 			Outcome:       app.PruningSkipped,
 			Err:           errors.New("scan denied"),
 		},
-		Archiving: app.ArchivingFinalData{
+		Shedding: app.SheddingFinalData{
 			Show:          true,
 			NothingToMove: true,
 		},
@@ -58,47 +58,47 @@ func TestFinalSummaryRendersPruningErrors(t *testing.T) {
 	}
 }
 
-func TestFinalSummaryRendersArchivingMoveSummary(t *testing.T) {
+func TestFinalSummaryRendersSheddingMoveSummary(t *testing.T) {
 	bucket := filepath.Join("C:", "Users", "pavel", "Shed", "2026", "05", "Downloads")
 	view := formatFinalSummary(app.FinalSummaryRequest{
-		Archiving: app.ArchivingFinalData{
+		Shedding: app.SheddingFinalData{
 			Show: true,
 			Summary: core.MoveSummary{
-				MovedSize:     10,
-				ArchiveBucket: bucket,
-				FailedPaths:   []string{filepath.Join("C:", "Users", "pavel", "Downloads", "locked.txt")},
+				MovedSize:   10,
+				ShedBucket:  bucket,
+				FailedPaths: []string{filepath.Join("C:", "Users", "pavel", "Downloads", "locked.txt")},
 			},
 			SkippedItems: []core.SkippedItem{{Path: filepath.Join("C:", "Users", "pavel", "Downloads", "unreadable.txt")}},
 		},
 	})
 
 	for _, want := range []string{
-		"Archiving",
+		"Shedding",
 		"10 B moved to " + bucket,
 		"Failed move: " + filepath.Join("C:", "Users", "pavel", "Downloads", "locked.txt"),
 		"Skipped item: " + filepath.Join("C:", "Users", "pavel", "Downloads", "unreadable.txt"),
 	} {
 		if !strings.Contains(view, want) {
-			t.Fatalf("expected archiving summary to contain %q, got:\n%s", want, view)
+			t.Fatalf("expected shedding summary to contain %q, got:\n%s", want, view)
 		}
 	}
 }
 
-func TestFinalSummaryRendersNothingToMoveInArchivingSection(t *testing.T) {
+func TestFinalSummaryRendersNothingToMoveInSheddingSection(t *testing.T) {
 	view := formatFinalSummary(app.FinalSummaryRequest{
 		Pruning: app.PruningFinalData{
 			HadCandidates: true,
 			Outcome:       app.PruningConfirmed,
 			Summary:       core.PruneSummary{PrunedSize: 1},
 		},
-		Archiving: app.ArchivingFinalData{
+		Shedding: app.SheddingFinalData{
 			Show:          true,
 			NothingToMove: true,
 		},
 	})
 
-	if !strings.Contains(view, "Archiving\nNothing to move") {
-		t.Fatalf("expected Nothing to move in Archiving section, got:\n%s", view)
+	if !strings.Contains(view, "Shedding\nNothing to move") {
+		t.Fatalf("expected Nothing to move in Shedding section, got:\n%s", view)
 	}
 }
 
@@ -109,13 +109,13 @@ func TestFinalSummarySeparatesSectionsWithBlankLine(t *testing.T) {
 			Outcome:       app.PruningConfirmed,
 			Summary:       core.PruneSummary{PrunedSize: 1},
 		},
-		Archiving: app.ArchivingFinalData{
+		Shedding: app.SheddingFinalData{
 			Show:          true,
 			NothingToMove: true,
 		},
 	})
 
-	if !strings.Contains(view, "Archive pruning\n1 B moved to Recycle Bin\n\nArchiving") {
+	if !strings.Contains(view, "Shed pruning\n1 B moved to Recycle Bin\n\nShedding") {
 		t.Fatalf("expected blank line between sections, got:\n%s", view)
 	}
 }
@@ -126,16 +126,16 @@ func TestFinalSummaryOmitsPruningWhenNoOpOrSkippedWithoutErrors(t *testing.T) {
 			HadCandidates: false,
 			Outcome:       app.PruningSkipped,
 		},
-		Archiving: app.ArchivingFinalData{
+		Shedding: app.SheddingFinalData{
 			Show:          true,
 			NothingToMove: true,
 		},
 	})
 
-	if strings.Contains(view, "Archive pruning") {
+	if strings.Contains(view, "Shed pruning") {
 		t.Fatalf("expected pruning section to be omitted, got:\n%s", view)
 	}
-	if !strings.Contains(view, "Archiving\nNothing to move") {
-		t.Fatalf("expected archiving section to remain, got:\n%s", view)
+	if !strings.Contains(view, "Shedding\nNothing to move") {
+		t.Fatalf("expected shedding section to remain, got:\n%s", view)
 	}
 }

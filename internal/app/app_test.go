@@ -33,78 +33,78 @@ func TestRunResolvesSelectedFolderBeforePruning(t *testing.T) {
 	}
 }
 
-func TestRunPruningNoOpFlowsToArchiving(t *testing.T) {
+func TestRunPruningNoOpFlowsToShedding(t *testing.T) {
 	cwd := t.TempDir()
 	pruner := &recordingPruner{}
-	archiving := &recordingArchivingRunner{outcome: ArchivingCompleted}
+	shedding := &recordingSheddingRunner{outcome: SheddingCompleted}
 	scanner := &recordingScanner{result: core.ScanResult{StaleItems: []core.StaleItem{{DisplayName: "old.txt"}}}}
 
-	code := Run(context.Background(), baseOptions(cwd, pruner, scanner, archiving, &recordingFinalRunner{}))
+	code := Run(context.Background(), baseOptions(cwd, pruner, scanner, shedding, &recordingFinalRunner{}))
 	if code != ExitOK {
 		t.Fatalf("expected ExitOK, got %d", code)
 	}
-	if !pruner.scanCalled || !scanner.called || !archiving.called {
-		t.Fatalf("expected pruning scan then archiving path to run")
+	if !pruner.scanCalled || !scanner.called || !shedding.called {
+		t.Fatalf("expected pruning scan then shedding path to run")
 	}
 }
 
-func TestRunPruningSkipFlowsToArchiving(t *testing.T) {
+func TestRunPruningSkipFlowsToShedding(t *testing.T) {
 	cwd := t.TempDir()
-	pruner := &recordingPruner{scan: core.PruneScanResult{Candidates: []core.PruneCandidate{{Month: core.ArchiveMonth{Path: "m"}}}}}
+	pruner := &recordingPruner{scan: core.PruneScanResult{Candidates: []core.PruneCandidate{{Month: core.ShedMonth{Path: "m"}}}}}
 	pruning := &recordingPruningRunner{result: PruningResult{Outcome: PruningSkipped}}
 	scanner := &recordingScanner{result: core.ScanResult{StaleItems: []core.StaleItem{{DisplayName: "old.txt"}}}}
-	archiving := &recordingArchivingRunner{outcome: ArchivingCompleted}
+	shedding := &recordingSheddingRunner{outcome: SheddingCompleted}
 
-	code := Run(context.Background(), baseOptions(cwd, pruner, scanner, archiving, &recordingFinalRunner{}, withPruning(pruning)))
+	code := Run(context.Background(), baseOptions(cwd, pruner, scanner, shedding, &recordingFinalRunner{}, withPruning(pruning)))
 	if code != ExitOK {
 		t.Fatalf("expected ExitOK, got %d", code)
 	}
-	if !archiving.called {
-		t.Fatalf("expected archiving after pruning skip")
+	if !shedding.called {
+		t.Fatalf("expected shedding after pruning skip")
 	}
 }
 
-func TestRunPruningQuitStopsWithoutArchivingAndFinal(t *testing.T) {
+func TestRunPruningQuitStopsWithoutSheddingAndFinal(t *testing.T) {
 	cwd := t.TempDir()
-	pruner := &recordingPruner{scan: core.PruneScanResult{Candidates: []core.PruneCandidate{{Month: core.ArchiveMonth{Path: "m"}}}}}
+	pruner := &recordingPruner{scan: core.PruneScanResult{Candidates: []core.PruneCandidate{{Month: core.ShedMonth{Path: "m"}}}}}
 	pruning := &recordingPruningRunner{result: PruningResult{Outcome: PruningQuit}}
 	scanner := &recordingScanner{}
-	archiving := &recordingArchivingRunner{}
+	shedding := &recordingSheddingRunner{}
 	final := &recordingFinalRunner{}
 
-	code := Run(context.Background(), baseOptions(cwd, pruner, scanner, archiving, final, withPruning(pruning)))
+	code := Run(context.Background(), baseOptions(cwd, pruner, scanner, shedding, final, withPruning(pruning)))
 	if code != ExitOK {
 		t.Fatalf("expected ExitOK, got %d", code)
 	}
-	if scanner.called || archiving.called || final.called {
-		t.Fatalf("expected hard quit to skip archiving and final summary")
+	if scanner.called || shedding.called || final.called {
+		t.Fatalf("expected hard quit to skip shedding and final summary")
 	}
 }
 
-func TestRunPruningErrorDoesNotBlockArchivingAndExitsError(t *testing.T) {
+func TestRunPruningErrorDoesNotBlockSheddingAndExitsError(t *testing.T) {
 	cwd := t.TempDir()
 	pruner := &recordingPruner{scanErr: errors.New("scan denied")}
 	scanner := &recordingScanner{result: core.ScanResult{StaleItems: []core.StaleItem{{DisplayName: "old.txt"}}}}
-	archiving := &recordingArchivingRunner{outcome: ArchivingCompleted}
+	shedding := &recordingSheddingRunner{outcome: SheddingCompleted}
 	final := &recordingFinalRunner{}
 
-	code := Run(context.Background(), baseOptions(cwd, pruner, scanner, archiving, final))
+	code := Run(context.Background(), baseOptions(cwd, pruner, scanner, shedding, final))
 	if code != ExitError {
 		t.Fatalf("expected ExitError, got %d", code)
 	}
-	if !archiving.called {
-		t.Fatalf("expected archiving to continue after pruning error")
+	if !shedding.called {
+		t.Fatalf("expected shedding to continue after pruning error")
 	}
 	if !final.called || final.request.Pruning.Err == nil {
 		t.Fatalf("expected final summary with pruning error")
 	}
 }
 
-func TestRunArchivingScanErrorWithoutPruningPrintsSimpleError(t *testing.T) {
+func TestRunSheddingScanErrorWithoutPruningPrintsSimpleError(t *testing.T) {
 	cwd := t.TempDir()
 	stderr := new(bytes.Buffer)
 	final := &recordingFinalRunner{}
-	opts := baseOptions(cwd, &recordingPruner{}, &recordingScanner{err: errors.New("scan denied")}, &recordingArchivingRunner{}, final, withStderr(stderr))
+	opts := baseOptions(cwd, &recordingPruner{}, &recordingScanner{err: errors.New("scan denied")}, &recordingSheddingRunner{}, final, withStderr(stderr))
 
 	code := Run(context.Background(), opts)
 	if code != ExitError {
@@ -118,40 +118,40 @@ func TestRunArchivingScanErrorWithoutPruningPrintsSimpleError(t *testing.T) {
 	}
 }
 
-func TestRunArchivingMoveErrorUsesFinalSummary(t *testing.T) {
+func TestRunSheddingMoveErrorUsesFinalSummary(t *testing.T) {
 	cwd := t.TempDir()
 	stderr := new(bytes.Buffer)
 	scanner := &recordingScanner{result: core.ScanResult{StaleItems: []core.StaleItem{{DisplayName: "old.txt"}}}}
-	archiving := &recordingArchivingRunner{outcome: ArchivingCompleted, err: errors.New("move failed")}
+	shedding := &recordingSheddingRunner{outcome: SheddingCompleted, err: errors.New("move failed")}
 	final := &recordingFinalRunner{}
-	opts := baseOptions(cwd, &recordingPruner{}, scanner, archiving, final, withStderr(stderr))
+	opts := baseOptions(cwd, &recordingPruner{}, scanner, shedding, final, withStderr(stderr))
 
 	code := Run(context.Background(), opts)
 	if code != ExitError {
 		t.Fatalf("expected ExitError, got %d", code)
 	}
-	if !final.called || final.request.Archiving.Err == nil {
-		t.Fatalf("expected final summary with archiving move error")
+	if !final.called || final.request.Shedding.Err == nil {
+		t.Fatalf("expected final summary with shedding move error")
 	}
 	if strings.Contains(stderr.String(), "Scan failed") {
 		t.Fatalf("expected no simple scan error output for move error, got %q", stderr.String())
 	}
 }
 
-func TestRunArchivingQuitAfterPruningShowsPruningSummary(t *testing.T) {
+func TestRunSheddingQuitAfterPruningShowsPruningSummary(t *testing.T) {
 	cwd := t.TempDir()
-	pruner := &recordingPruner{scan: core.PruneScanResult{Candidates: []core.PruneCandidate{{Month: core.ArchiveMonth{Path: "m"}}}}}
+	pruner := &recordingPruner{scan: core.PruneScanResult{Candidates: []core.PruneCandidate{{Month: core.ShedMonth{Path: "m"}}}}}
 	pruning := &recordingPruningRunner{result: PruningResult{Outcome: PruningConfirmed, Summary: core.PruneSummary{PrunedSize: 1, PrunedPaths: []string{"m"}}}}
 	scanner := &recordingScanner{result: core.ScanResult{StaleItems: []core.StaleItem{{DisplayName: "old.txt"}}}}
-	archiving := &recordingArchivingRunner{outcome: ArchivingCancelled}
+	shedding := &recordingSheddingRunner{outcome: SheddingCancelled}
 	final := &recordingFinalRunner{}
 
-	code := Run(context.Background(), baseOptions(cwd, pruner, scanner, archiving, final, withPruning(pruning)))
+	code := Run(context.Background(), baseOptions(cwd, pruner, scanner, shedding, final, withPruning(pruning)))
 	if code != ExitOK {
 		t.Fatalf("expected ExitOK, got %d", code)
 	}
 	if !final.called {
-		t.Fatalf("expected final summary after archiving quit")
+		t.Fatalf("expected final summary after shedding quit")
 	}
 	if !final.request.Pruning.HadCandidates {
 		t.Fatalf("expected pruning summary data")
@@ -163,7 +163,7 @@ func TestRunKeepsSimpleNothingToMoveWithoutPruningOutput(t *testing.T) {
 	stdout := new(bytes.Buffer)
 	final := &recordingFinalRunner{}
 
-	code := Run(context.Background(), baseOptions(cwd, &recordingPruner{}, &recordingScanner{}, &recordingArchivingRunner{}, final, withStdout(stdout)))
+	code := Run(context.Background(), baseOptions(cwd, &recordingPruner{}, &recordingScanner{}, &recordingSheddingRunner{}, final, withStdout(stdout)))
 	if code != ExitOK {
 		t.Fatalf("expected ExitOK, got %d", code)
 	}
@@ -177,16 +177,16 @@ func TestRunKeepsSimpleNothingToMoveWithoutPruningOutput(t *testing.T) {
 
 func TestRunShowsNothingToMoveInFinalWhenPruningHasOutput(t *testing.T) {
 	cwd := t.TempDir()
-	pruner := &recordingPruner{scan: core.PruneScanResult{Candidates: []core.PruneCandidate{{Month: core.ArchiveMonth{Path: "m"}}}}}
+	pruner := &recordingPruner{scan: core.PruneScanResult{Candidates: []core.PruneCandidate{{Month: core.ShedMonth{Path: "m"}}}}}
 	pruning := &recordingPruningRunner{result: PruningResult{Outcome: PruningConfirmed, Summary: core.PruneSummary{PrunedSize: 1}}}
 	final := &recordingFinalRunner{}
 	stdout := new(bytes.Buffer)
 
-	code := Run(context.Background(), baseOptions(cwd, pruner, &recordingScanner{}, &recordingArchivingRunner{}, final, withPruning(pruning), withStdout(stdout)))
+	code := Run(context.Background(), baseOptions(cwd, pruner, &recordingScanner{}, &recordingSheddingRunner{}, final, withPruning(pruning), withStdout(stdout)))
 	if code != ExitOK {
 		t.Fatalf("expected ExitOK, got %d", code)
 	}
-	if final.request.Archiving.NothingToMove != true || !final.request.Archiving.Show {
+	if final.request.Shedding.NothingToMove != true || !final.request.Shedding.Show {
 		t.Fatalf("expected NothingToMove to be reported in final summary")
 	}
 	if stdout.String() != "" {
@@ -205,18 +205,18 @@ func TestRunExitCodePolicy(t *testing.T) {
 		{
 			name: "failed prune paths",
 			opts: func() Options {
-				pruner := &recordingPruner{scan: core.PruneScanResult{Candidates: []core.PruneCandidate{{Month: core.ArchiveMonth{Path: "m"}}}}}
+				pruner := &recordingPruner{scan: core.PruneScanResult{Candidates: []core.PruneCandidate{{Month: core.ShedMonth{Path: "m"}}}}}
 				pruning := &recordingPruningRunner{result: PruningResult{Outcome: PruningConfirmed, Summary: core.PruneSummary{FailedPaths: []string{"m"}}}}
-				return baseOptions(cwd, pruner, &recordingScanner{}, &recordingArchivingRunner{}, &recordingFinalRunner{}, withPruning(pruning))
+				return baseOptions(cwd, pruner, &recordingScanner{}, &recordingSheddingRunner{}, &recordingFinalRunner{}, withPruning(pruning))
 			},
 			want: ExitError,
 		},
 		{
-			name: "archiving error",
+			name: "shedding error",
 			opts: func() Options {
 				scanner := &recordingScanner{result: core.ScanResult{StaleItems: []core.StaleItem{{DisplayName: "old"}}}}
-				archiving := &recordingArchivingRunner{outcome: ArchivingCompleted, err: errors.New("move failed")}
-				return baseOptions(cwd, &recordingPruner{}, scanner, archiving, &recordingFinalRunner{})
+				shedding := &recordingSheddingRunner{outcome: SheddingCompleted, err: errors.New("move failed")}
+				return baseOptions(cwd, &recordingPruner{}, scanner, shedding, &recordingFinalRunner{})
 			},
 			want: ExitError,
 		},
@@ -224,17 +224,17 @@ func TestRunExitCodePolicy(t *testing.T) {
 			name: "failed move paths",
 			opts: func() Options {
 				scanner := &recordingScanner{result: core.ScanResult{StaleItems: []core.StaleItem{{DisplayName: "old"}}}}
-				archiving := &recordingArchivingRunner{outcome: ArchivingCompleted, result: core.MoveSummary{FailedPaths: []string{"x"}}}
-				return baseOptions(cwd, &recordingPruner{}, scanner, archiving, &recordingFinalRunner{})
+				shedding := &recordingSheddingRunner{outcome: SheddingCompleted, result: core.MoveSummary{FailedPaths: []string{"x"}}}
+				return baseOptions(cwd, &recordingPruner{}, scanner, shedding, &recordingFinalRunner{})
 			},
 			want: ExitError,
 		},
 		{
-			name: "declined archiving without failures",
+			name: "declined shedding without failures",
 			opts: func() Options {
 				scanner := &recordingScanner{result: core.ScanResult{StaleItems: []core.StaleItem{{DisplayName: "old"}}}}
-				archiving := &recordingArchivingRunner{outcome: ArchivingCancelled}
-				return baseOptions(cwd, &recordingPruner{}, scanner, archiving, &recordingFinalRunner{})
+				shedding := &recordingSheddingRunner{outcome: SheddingCancelled}
+				return baseOptions(cwd, &recordingPruner{}, scanner, shedding, &recordingFinalRunner{})
 			},
 			want: ExitOK,
 		},
@@ -284,16 +284,16 @@ func (s *recordingScanner) Scan(context.Context, string) (core.ScanResult, error
 	return s.result, s.err
 }
 
-type recordingArchivingRunner struct {
+type recordingSheddingRunner struct {
 	called  bool
-	outcome ArchivingOutcome
+	outcome SheddingOutcome
 	result  core.MoveSummary
 	err     error
 }
 
-func (r *recordingArchivingRunner) RunArchiving(context.Context, ArchivingRequest) (ArchivingResult, error) {
+func (r *recordingSheddingRunner) RunShedding(context.Context, SheddingRequest) (SheddingResult, error) {
 	r.called = true
-	return ArchivingResult{Outcome: r.outcome, Summary: r.result}, r.err
+	return SheddingResult{Outcome: r.outcome, Summary: r.result}, r.err
 }
 
 type recordingFinalRunner struct {
@@ -336,16 +336,16 @@ func withStderr(stderr *bytes.Buffer) optionMutator {
 	return func(opts *Options) { opts.Stderr = stderr }
 }
 
-func baseOptions(cwd string, pruner Pruner, scanner Scanner, archiving ArchivingRunner, final FinalRunner, mutators ...optionMutator) Options {
+func baseOptions(cwd string, pruner Pruner, scanner Scanner, shedding SheddingRunner, final FinalRunner, mutators ...optionMutator) Options {
 	opts := Options{
-		Stdout:    new(bytes.Buffer),
-		Stderr:    new(bytes.Buffer),
-		Resolver:  fakeResolver{cwd: cwd},
-		Pruner:    pruner,
-		Scanner:   scanner,
-		Mover:     &recordingMover{},
-		Archiving: archiving,
-		Final:     final,
+		Stdout:   new(bytes.Buffer),
+		Stderr:   new(bytes.Buffer),
+		Resolver: fakeResolver{cwd: cwd},
+		Pruner:   pruner,
+		Scanner:  scanner,
+		Mover:    &recordingMover{},
+		Shedding: shedding,
+		Final:    final,
 	}
 	for _, mutate := range mutators {
 		mutate(&opts)
@@ -356,14 +356,14 @@ func baseOptions(cwd string, pruner Pruner, scanner Scanner, archiving Archiving
 type recordingMover struct{}
 
 func (recordingMover) Move(_ context.Context, selectedFolder string, _ core.ScanResult) (core.MoveSummary, error) {
-	return core.MoveSummary{ArchiveBucket: filepath.Join(selectedFolder, "Shed")}, nil
+	return core.MoveSummary{ShedBucket: filepath.Join(selectedFolder, "Shed")}, nil
 }
 
 func TestNothingToMoveStillIncludesSkippedInSimpleOutput(t *testing.T) {
 	cwd := t.TempDir()
 	stdout := new(bytes.Buffer)
 	skipped := filepath.Join(cwd, "unreadable")
-	code := Run(context.Background(), baseOptions(cwd, &recordingPruner{}, &recordingScanner{result: core.ScanResult{SkippedItems: []core.SkippedItem{{Path: skipped}}}}, &recordingArchivingRunner{}, &recordingFinalRunner{}, withStdout(stdout)))
+	code := Run(context.Background(), baseOptions(cwd, &recordingPruner{}, &recordingScanner{result: core.ScanResult{SkippedItems: []core.SkippedItem{{Path: skipped}}}}, &recordingSheddingRunner{}, &recordingFinalRunner{}, withStdout(stdout)))
 	if code != ExitOK {
 		t.Fatalf("expected ExitOK, got %d", code)
 	}

@@ -145,17 +145,17 @@ func TestScannerTreatsSymlinkAsLeaf(t *testing.T) {
 	}
 }
 
-func TestScannerRejectsArchiveSources(t *testing.T) {
+func TestScannerRejectsShedSources(t *testing.T) {
 	home := t.TempDir()
-	archive := ArchiveRootFromHome(home)
-	selected := filepath.Join(archive, "2026", "05", "Downloads")
+	shed := ShedRootFromHome(home)
+	selected := filepath.Join(shed, "2026", "05", "Downloads")
 	if err := os.MkdirAll(selected, 0o700); err != nil {
 		t.Fatal(err)
 	}
 
-	_, err := Scanner{ArchiveRoot: archive}.Scan(context.Background(), selected)
+	_, err := Scanner{ShedRoot: shed}.Scan(context.Background(), selected)
 	if err == nil {
-		t.Fatalf("expected Archive source error")
+		t.Fatalf("expected Shed source error")
 	}
 }
 

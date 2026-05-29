@@ -12,14 +12,14 @@ import (
 )
 
 type Scanner struct {
-	ArchiveRoot string
-	Now         func() time.Time
+	ShedRoot string
+	Now      func() time.Time
 }
 
-func NewScanner(archiveRoot string) Scanner {
+func NewScanner(shedRoot string) Scanner {
 	return Scanner{
-		ArchiveRoot: archiveRoot,
-		Now:         time.Now,
+		ShedRoot: shedRoot,
+		Now:      time.Now,
 	}
 }
 
@@ -27,8 +27,8 @@ func (scanner Scanner) Scan(ctx context.Context, selectedFolder string) (core.Sc
 	if scanner.Now == nil {
 		scanner.Now = time.Now
 	}
-	if scanner.ArchiveRoot != "" && core.IsArchiveSource(selectedFolder, scanner.ArchiveRoot) {
-		return core.ScanResult{}, fmt.Errorf("selected folder is an Archive source")
+	if scanner.ShedRoot != "" && core.IsShedSource(selectedFolder, scanner.ShedRoot) {
+		return core.ScanResult{}, fmt.Errorf("selected folder is a Shed source")
 	}
 
 	entries, err := os.ReadDir(selectedFolder)
@@ -101,16 +101,16 @@ func (scanner Scanner) rootItem(path, name string) (core.RootItem, error) {
 	return item, nil
 }
 
-func ArchiveRootFromHome(homeDir string) string {
+func ShedRootFromHome(homeDir string) string {
 	return filepath.Join(homeDir, "Shed")
 }
 
-func UserArchiveRoot() (string, error) {
+func UserShedRoot() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	return ArchiveRootFromHome(home), nil
+	return ShedRootFromHome(home), nil
 }
 
 func UnsupportedPlatform() bool {

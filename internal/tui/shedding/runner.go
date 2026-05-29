@@ -1,4 +1,4 @@
-package archiving
+package shedding
 
 import (
 	"context"
@@ -15,7 +15,7 @@ type Runner struct {
 	Output io.Writer
 }
 
-func (runner Runner) RunArchiving(ctx context.Context, request app.ArchivingRequest) (app.ArchivingResult, error) {
+func (runner Runner) RunShedding(ctx context.Context, request app.SheddingRequest) (app.SheddingResult, error) {
 	initialModel := newModel(ctx, request)
 	output := runner.Output
 	if output == nil {
@@ -30,19 +30,19 @@ func (runner Runner) RunArchiving(ctx context.Context, request app.ArchivingRequ
 
 	finalModel, err := program.Run()
 	if err != nil {
-		return app.ArchivingResult{}, err
+		return app.SheddingResult{}, err
 	}
-	archiving, ok := finalModel.(model)
+	shedding, ok := finalModel.(model)
 	if !ok {
-		return app.ArchivingResult{}, nil
+		return app.SheddingResult{}, nil
 	}
-	if archiving.cancelled {
-		return app.ArchivingResult{Outcome: app.ArchivingCancelled}, nil
+	if shedding.cancelled {
+		return app.SheddingResult{Outcome: app.SheddingCancelled}, nil
 	}
-	return app.ArchivingResult{
-		Outcome: app.ArchivingCompleted,
-		Summary: archiving.summary,
-	}, archiving.err
+	return app.SheddingResult{
+		Outcome: app.SheddingCompleted,
+		Summary: shedding.summary,
+	}, shedding.err
 }
 
 type phase int
@@ -57,7 +57,7 @@ const (
 
 type model struct {
 	ctx          context.Context
-	request      app.ArchivingRequest
+	request      app.SheddingRequest
 	confirmation confirmationModel
 	moving       movingModel
 	phase        phase
@@ -66,7 +66,7 @@ type model struct {
 	cancelled    bool
 }
 
-func newModel(ctx context.Context, request app.ArchivingRequest) model {
+func newModel(ctx context.Context, request app.SheddingRequest) model {
 	return model{
 		ctx:          ctx,
 		request:      request,
@@ -142,6 +142,6 @@ func (m model) View() tea.View {
 	case phasePreflightFailure:
 		return tea.NewView("")
 	default:
-		return tea.NewView("Invalid archiving state")
+		return tea.NewView("Invalid shedding state")
 	}
 }

@@ -49,7 +49,7 @@ func TestConfirmationViewShowsTotalAndMonths(t *testing.T) {
 	view := newConfirmationModel(testScan()).View().Content
 
 	for _, want := range []string{
-		"Archive pruning",
+		"Shed pruning",
 		"3 KB will be moved to Recycle Bin. Press y/enter to confirm.",
 		filepath.Join("~", "Shed", "2024", "01"),
 		filepath.Join("~", "Shed", "2024", "03"),
@@ -75,7 +75,7 @@ func TestProgressViewShownAfterConfirm(t *testing.T) {
 	if pruning.phase != phasePruning {
 		t.Fatalf("expected pruning phase, got %v", pruning.phase)
 	}
-	if !strings.Contains(view, "Pruning Archive months") {
+	if !strings.Contains(view, "Pruning Shed months") {
 		t.Fatalf("expected progress content, got %q", view)
 	}
 }
@@ -155,8 +155,8 @@ func testRequest(prune app.PruneFunc) app.PruningRequest {
 func testScan() core.PruneScanResult {
 	return core.PruneScanResult{
 		Candidates: []core.PruneCandidate{
-			{Month: core.ArchiveMonth{Path: filepath.Join("~", "Shed", "2024", "01"), Year: 2024, Month: 1}, Size: 2048},
-			{Month: core.ArchiveMonth{Path: filepath.Join("~", "Shed", "2024", "03"), Year: 2024, Month: 3}, Size: 1024},
+			{Month: core.ShedMonth{Path: filepath.Join("~", "Shed", "2024", "01"), Year: 2024, Month: 1}, Size: 2048},
+			{Month: core.ShedMonth{Path: filepath.Join("~", "Shed", "2024", "03"), Year: 2024, Month: 3}, Size: 1024},
 		},
 	}
 }

@@ -48,10 +48,10 @@ type confirmationModel struct {
 func newConfirmationModel(scan core.PruneScanResult) confirmationModel {
 	items := make([]list.Item, len(scan.Candidates))
 	for i, candidate := range scan.Candidates {
-		items[i] = archiveMonthItem(candidate.Month.Path)
+		items[i] = shedMonthItem(candidate.Month.Path)
 	}
 
-	l := list.New(items, archiveMonthDelegate{}, 80, 10)
+	l := list.New(items, shedMonthDelegate{}, 80, 10)
 	l.SetShowTitle(false)
 	l.SetShowStatusBar(false)
 	l.SetFilteringEnabled(false)
@@ -106,7 +106,7 @@ func (m confirmationModel) View() tea.View {
 	}
 
 	content := []string{
-		headerStyle.Render("Archive pruning"),
+		headerStyle.Render("Shed pruning"),
 		"",
 		fmt.Sprintf("%s will be moved to Recycle Bin. Press y/enter to confirm.", core.FormatSize(total)),
 		"",
@@ -120,27 +120,27 @@ func (m confirmationModel) Result() confirmationResult {
 	return m.result
 }
 
-type archiveMonthItem string
+type shedMonthItem string
 
-func (item archiveMonthItem) FilterValue() string {
+func (item shedMonthItem) FilterValue() string {
 	return string(item)
 }
 
-type archiveMonthDelegate struct{}
+type shedMonthDelegate struct{}
 
-func (archiveMonthDelegate) Height() int {
+func (shedMonthDelegate) Height() int {
 	return 1
 }
 
-func (archiveMonthDelegate) Spacing() int {
+func (shedMonthDelegate) Spacing() int {
 	return 0
 }
 
-func (archiveMonthDelegate) Update(tea.Msg, *list.Model) tea.Cmd {
+func (shedMonthDelegate) Update(tea.Msg, *list.Model) tea.Cmd {
 	return nil
 }
 
-func (archiveMonthDelegate) Render(w io.Writer, _ list.Model, _ int, item list.Item) {
+func (shedMonthDelegate) Render(w io.Writer, _ list.Model, _ int, item list.Item) {
 	_, _ = fmt.Fprint(w, listItemStyle.Render("  "+item.FilterValue()))
 }
 

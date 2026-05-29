@@ -5,14 +5,14 @@ import (
 	"time"
 )
 
-type ArchiveMonth struct {
+type ShedMonth struct {
 	Path  string
 	Year  int
 	Month int
 }
 
 type PruneCandidate struct {
-	Month ArchiveMonth
+	Month ShedMonth
 	Size  int64
 }
 
@@ -26,7 +26,7 @@ type PruneSummary struct {
 	FailedPaths []string
 }
 
-func IsPruneEligible(month ArchiveMonth, now time.Time) bool {
+func IsPruneEligible(month ShedMonth, now time.Time) bool {
 	cutoff := now.AddDate(0, -6, 0)
 	return monthKey(month.Year, month.Month) < monthKey(cutoff.Year(), int(cutoff.Month()))
 }

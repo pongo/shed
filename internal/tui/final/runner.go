@@ -29,8 +29,8 @@ func formatFinalSummary(request app.FinalSummaryRequest) string {
 	if pruningSection, ok := renderPruningSection(request.Pruning); ok {
 		sections = append(sections, pruningSection)
 	}
-	if archivingSection, ok := renderArchivingSection(request.Archiving); ok {
-		sections = append(sections, archivingSection)
+	if sheddingSection, ok := renderSheddingSection(request.Shedding); ok {
+		sections = append(sections, sheddingSection)
 	}
 
 	if len(sections) == 0 {
@@ -44,7 +44,7 @@ func renderPruningSection(pruning app.PruningFinalData) (string, bool) {
 		return "", false
 	}
 
-	lines := []string{"Archive pruning"}
+	lines := []string{"Shed pruning"}
 	lines = append(lines, fmt.Sprintf("%s moved to Recycle Bin", core.FormatSize(pruning.Summary.PrunedSize)))
 	for _, path := range pruning.Summary.PrunedPaths {
 		lines = append(lines, "Pruned: "+path)
@@ -75,27 +75,27 @@ func shouldRenderPruning(pruning app.PruningFinalData) bool {
 	return false
 }
 
-func renderArchivingSection(archiving app.ArchivingFinalData) (string, bool) {
-	if !archiving.Show && !archiving.NothingToMove && archiving.Err == nil && archiving.Summary.ArchiveBucket == "" && archiving.Summary.MovedSize == 0 && len(archiving.Summary.FailedPaths) == 0 && len(archiving.SkippedItems) == 0 {
+func renderSheddingSection(shedding app.SheddingFinalData) (string, bool) {
+	if !shedding.Show && !shedding.NothingToMove && shedding.Err == nil && shedding.Summary.ShedBucket == "" && shedding.Summary.MovedSize == 0 && len(shedding.Summary.FailedPaths) == 0 && len(shedding.SkippedItems) == 0 {
 		return "", false
 	}
 
-	lines := []string{"Archiving"}
+	lines := []string{"Shedding"}
 
-	if archiving.NothingToMove {
+	if shedding.NothingToMove {
 		lines = append(lines, "Nothing to move")
 	} else {
-		lines = append(lines, fmt.Sprintf("%s moved to %s", core.FormatSize(archiving.Summary.MovedSize), archiving.Summary.ArchiveBucket))
+		lines = append(lines, fmt.Sprintf("%s moved to %s", core.FormatSize(shedding.Summary.MovedSize), shedding.Summary.ShedBucket))
 	}
 
-	for _, failed := range archiving.Summary.FailedPaths {
+	for _, failed := range shedding.Summary.FailedPaths {
 		lines = append(lines, "Failed move: "+failed)
 	}
-	for _, skipped := range archiving.SkippedItems {
+	for _, skipped := range shedding.SkippedItems {
 		lines = append(lines, "Skipped item: "+skipped.Path)
 	}
-	if archiving.Err != nil {
-		lines = append(lines, "Archiving error: "+archiving.Err.Error())
+	if shedding.Err != nil {
+		lines = append(lines, "Shedding error: "+shedding.Err.Error())
 	}
 
 	return strings.Join(lines, "\n"), true

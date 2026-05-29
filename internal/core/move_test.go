@@ -2,13 +2,13 @@ package core
 
 import "testing"
 
-func TestDecideArchiveMoveUsesNumberedSuffixForFileConflict(t *testing.T) {
-	decision := DecideArchiveMove(
-		ArchiveMoveCandidate{Name: "report.pdf", Kind: FileItem},
-		[]ArchiveMoveEntry{{Name: "report.pdf", Kind: FileItem}},
+func TestDecideShedMoveUsesNumberedSuffixForFileConflict(t *testing.T) {
+	decision := DecideShedMove(
+		ShedMoveCandidate{Name: "report.pdf", Kind: FileItem},
+		[]ShedMoveEntry{{Name: "report.pdf", Kind: FileItem}},
 	)
 
-	if decision.Action != MoveIntoArchive {
+	if decision.Action != MoveIntoShed {
 		t.Fatalf("expected move action, got %v", decision.Action)
 	}
 	if decision.TargetName != "report (1).pdf" {
@@ -16,10 +16,10 @@ func TestDecideArchiveMoveUsesNumberedSuffixForFileConflict(t *testing.T) {
 	}
 }
 
-func TestDecideArchiveMoveMergesFolderConflict(t *testing.T) {
-	decision := DecideArchiveMove(
-		ArchiveMoveCandidate{Name: "project", Kind: FolderItem},
-		[]ArchiveMoveEntry{{Name: "project", Kind: FolderItem}},
+func TestDecideShedMoveMergesFolderConflict(t *testing.T) {
+	decision := DecideShedMove(
+		ShedMoveCandidate{Name: "project", Kind: FolderItem},
+		[]ShedMoveEntry{{Name: "project", Kind: FolderItem}},
 	)
 
 	if decision.Action != MergeIntoExistingFolder {
@@ -30,13 +30,13 @@ func TestDecideArchiveMoveMergesFolderConflict(t *testing.T) {
 	}
 }
 
-func TestDecideArchiveMoveRenamesFolderWhenExistingNameIsFile(t *testing.T) {
-	decision := DecideArchiveMove(
-		ArchiveMoveCandidate{Name: "project", Kind: FolderItem},
-		[]ArchiveMoveEntry{{Name: "project", Kind: FileItem}},
+func TestDecideShedMoveRenamesFolderWhenExistingNameIsFile(t *testing.T) {
+	decision := DecideShedMove(
+		ShedMoveCandidate{Name: "project", Kind: FolderItem},
+		[]ShedMoveEntry{{Name: "project", Kind: FileItem}},
 	)
 
-	if decision.Action != MoveIntoArchive {
+	if decision.Action != MoveIntoShed {
 		t.Fatalf("expected move action, got %v", decision.Action)
 	}
 	if decision.TargetName != "project (1)" {

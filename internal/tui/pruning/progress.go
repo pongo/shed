@@ -56,5 +56,5 @@ func (m progressModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m progressModel) View() tea.View {
-	return tea.NewView(m.spinner.View() + " Pruning Archive months")
+	return tea.NewView(m.spinner.View() + " Pruning Shed months")
 }
