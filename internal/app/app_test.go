@@ -100,6 +100,44 @@ func TestRunPruningErrorDoesNotBlockArchivingAndExitsError(t *testing.T) {
 	}
 }
 
+func TestRunArchivingScanErrorWithoutPruningPrintsSimpleError(t *testing.T) {
+	cwd := t.TempDir()
+	stderr := new(bytes.Buffer)
+	final := &recordingFinalRunner{}
+	opts := baseOptions(cwd, &recordingPruner{}, &recordingScanner{err: errors.New("scan denied")}, &recordingArchivingRunner{}, final, withStderr(stderr))
+
+	code := Run(context.Background(), opts)
+	if code != ExitError {
+		t.Fatalf("expected ExitError, got %d", code)
+	}
+	if final.called {
+		t.Fatalf("expected no final summary for plain scan error")
+	}
+	if !strings.Contains(stderr.String(), "Scan failed: scan denied") {
+		t.Fatalf("expected simple scan error output, got %q", stderr.String())
+	}
+}
+
+func TestRunArchivingMoveErrorUsesFinalSummary(t *testing.T) {
+	cwd := t.TempDir()
+	stderr := new(bytes.Buffer)
+	scanner := &recordingScanner{result: core.ScanResult{StaleItems: []core.StaleItem{{DisplayName: "old.txt"}}}}
+	archiving := &recordingArchivingRunner{outcome: ArchivingCompleted, err: errors.New("move failed")}
+	final := &recordingFinalRunner{}
+	opts := baseOptions(cwd, &recordingPruner{}, scanner, archiving, final, withStderr(stderr))
+
+	code := Run(context.Background(), opts)
+	if code != ExitError {
+		t.Fatalf("expected ExitError, got %d", code)
+	}
+	if !final.called || final.request.Archiving.Err == nil {
+		t.Fatalf("expected final summary with archiving move error")
+	}
+	if strings.Contains(stderr.String(), "Scan failed") {
+		t.Fatalf("expected no simple scan error output for move error, got %q", stderr.String())
+	}
+}
+
 func TestRunArchivingQuitAfterPruningShowsPruningSummary(t *testing.T) {
 	cwd := t.TempDir()
 	pruner := &recordingPruner{scan: core.PruneScanResult{Candidates: []core.PruneCandidate{{Month: core.ArchiveMonth{Path: "m"}}}}}
@@ -292,6 +330,10 @@ func withPruning(pruning PruningRunner) optionMutator {
 
 func withStdout(stdout *bytes.Buffer) optionMutator {
 	return func(opts *Options) { opts.Stdout = stdout }
+}
+
+func withStderr(stderr *bytes.Buffer) optionMutator {
+	return func(opts *Options) { opts.Stderr = stderr }
 }
 
 func baseOptions(cwd string, pruner Pruner, scanner Scanner, archiving ArchivingRunner, final FinalRunner, mutators ...optionMutator) Options {
