@@ -50,15 +50,3 @@ func TestSelectedFolderResolverRejectsFiles(t *testing.T) {
 		t.Fatalf("expected non-folder path error")
 	}
 }
-
-func TestSelectedFolderResolverAcceptsTrailingQuoteFromWindowsEscaping(t *testing.T) {
-	folder := t.TempDir()
-
-	selected, err := SelectedFolderResolver{}.Resolve(folder + `"`)
-	if err != nil {
-		t.Fatalf("expected folder with trailing quote to resolve: %v", err)
-	}
-	if selected != folder {
-		t.Fatalf("expected %q, got %q", folder, selected)
-	}
-}

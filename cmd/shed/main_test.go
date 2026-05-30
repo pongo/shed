@@ -139,6 +139,24 @@ func TestParseCLI(t *testing.T) {
 			wantArg: []string{"Downloads"},
 			wantAge: 0,
 		},
+		{
+			name:    "folder with trailing quote from cmd trailing slash",
+			args:    []string{`C:\Users\pavel\Downloads"`},
+			wantArg: []string{`C:\Users\pavel\Downloads`},
+			wantAge: 60,
+		},
+		{
+			name:    "folder with quote before trailing slash",
+			args:    []string{`C:\Users\pavel\Downloads"\`},
+			wantArg: []string{`C:\Users\pavel\Downloads\`},
+			wantAge: 60,
+		},
+		{
+			name:    "folder with escaped quote from go run",
+			args:    []string{`C:\Users\pavel\Downloads\"`},
+			wantArg: []string{`C:\Users\pavel\Downloads\`},
+			wantAge: 60,
+		},
 	}
 
 	for _, tc := range cases {
