@@ -17,6 +17,7 @@ const (
 type Options struct {
 	Args             []string
 	InvocationFolder string
+	ShedRoot         string
 	Stdout           io.Writer
 	Stderr           io.Writer
 	Resolver         SelectedFolderResolver
@@ -38,7 +39,7 @@ type Scanner interface {
 }
 
 type Mover interface {
-	Move(ctx context.Context, invocationFolder, selectedFolder string, scan core.ScanResult) (core.MoveSummary, error)
+	Move(ctx context.Context, selectedFolder string, planned core.PlannedShedBucket, scan core.ScanResult) (core.MoveSummary, error)
 }
 type Pruner interface {
 	Scan(ctx context.Context) (core.PruneScanResult, error)
@@ -204,7 +205,7 @@ func withDefaults(opts Options) Options {
 
 type missingMover struct{}
 
-func (missingMover) Move(context.Context, string, string, core.ScanResult) (core.MoveSummary, error) {
+func (missingMover) Move(context.Context, string, core.PlannedShedBucket, core.ScanResult) (core.MoveSummary, error) {
 	return core.MoveSummary{}, fmt.Errorf("mover is not configured")
 }
 

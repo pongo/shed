@@ -5,29 +5,22 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"time"
 
 	"shed/internal/core"
 )
 
 type Mover struct {
 	ShedRoot string
-	Now      func() time.Time
 }
 
 func NewMover(shedRoot string) Mover {
 	return Mover{
 		ShedRoot: shedRoot,
-		Now:      time.Now,
 	}
 }
 
-func (mover Mover) Move(ctx context.Context, invocationFolder, selectedFolder string, scan core.ScanResult) (core.MoveSummary, error) {
-	if mover.Now == nil {
-		mover.Now = time.Now
-	}
-
-	bucket := core.ShedBucket(mover.ShedRoot, mover.Now(), invocationFolder, selectedFolder)
+func (mover Mover) Move(ctx context.Context, selectedFolder string, planned core.PlannedShedBucket, scan core.ScanResult) (core.MoveSummary, error) {
+	bucket := planned.ShedBucket
 	if err := preflight(selectedFolder, mover.ShedRoot, bucket); err != nil {
 		return core.MoveSummary{ShedBucket: bucket}, err
 	}

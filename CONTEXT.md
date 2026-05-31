@@ -20,6 +20,10 @@ _Avoid_: Archive source, Self archive
 A folder inside the **Shed** for items moved from a selected folder during a calendar month, shaped as `~\Shed\<yyyy>\<MM>\<bucket-source-path>`. When the Selected folder is the invocation folder or one of its descendants, based on their normalized absolute paths, and the invocation folder is not a filesystem root, the bucket source path starts with the invocation folder name and continues with the Selected folder's relative path from that folder. Otherwise, the bucket source path is the Selected folder name. shed does not guarantee that the bucket source path matches the selected folder's on-disk letter casing.
 _Avoid_: Archive bucket, archive destination
 
+**Planned Shed bucket**:
+The **Shed bucket** chosen for a shed run before confirmation. The confirmation view and the later **Move summary** must refer to the same Planned Shed bucket, even if the calendar month changes between confirmation and **Shedding**.
+_Avoid_: Tentative destination, recalculated bucket
+
 **Shed month**:
 A calendar-month folder inside the **Shed**, shaped as `~\Shed\<yyyy>\<MM>`, containing zero or more **Shed buckets**. Its age is determined only from its `<yyyy>\<MM>` path components.
 _Avoid_: Archive month, monthly bucket

@@ -7,6 +7,14 @@ import (
 	"time"
 )
 
+type PlannedShedBucket struct {
+	MoveDate          time.Time
+	HeaderTitle       string
+	BucketSourcePath  string
+	CompactShedBucket string
+	ShedBucket        string
+}
+
 func HeaderTitle(selectedFolder string) string {
 	clean := filepath.Clean(selectedFolder)
 	if filepath.Dir(clean) == clean {
@@ -50,4 +58,15 @@ func CompactShedBucket(moveDate time.Time, invocationFolder, selectedFolder stri
 
 func ShedBucket(shedRoot string, moveDate time.Time, invocationFolder, selectedFolder string) string {
 	return filepath.Join(shedRoot, fmt.Sprintf("%04d", moveDate.Year()), fmt.Sprintf("%02d", int(moveDate.Month())), BucketSourcePath(invocationFolder, selectedFolder))
+}
+
+func PlanShedBucket(shedRoot string, moveDate time.Time, invocationFolder, selectedFolder string) PlannedShedBucket {
+	bucketSourcePath := BucketSourcePath(invocationFolder, selectedFolder)
+	return PlannedShedBucket{
+		MoveDate:          moveDate,
+		HeaderTitle:       HeaderTitle(selectedFolder),
+		BucketSourcePath:  bucketSourcePath,
+		CompactShedBucket: filepath.Join("~", "Shed", fmt.Sprintf("%04d", moveDate.Year()), fmt.Sprintf("%02d", int(moveDate.Month())), bucketSourcePath),
+		ShedBucket:        filepath.Join(shedRoot, fmt.Sprintf("%04d", moveDate.Year()), fmt.Sprintf("%02d", int(moveDate.Month())), bucketSourcePath),
+	}
 }

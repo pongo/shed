@@ -45,6 +45,31 @@ func TestShedBucketUsesShedRootDateAndSelectedFolderBaseName(t *testing.T) {
 	}
 }
 
+func TestPlanShedBucketReturnsOneFrozenBucketFact(t *testing.T) {
+	shedRoot := filepath.Join("C:", "Users", "pavel", "Shed")
+	invocation := filepath.Join("C:", "Users", "pavel", "Projects", "shed")
+	selected := filepath.Join(invocation, ".scratch")
+	moveDate := time.Date(2026, 5, 31, 23, 59, 0, 0, time.UTC)
+
+	planned := PlanShedBucket(shedRoot, moveDate, invocation, selected)
+
+	if planned.MoveDate != moveDate {
+		t.Fatalf("expected move date %v, got %v", moveDate, planned.MoveDate)
+	}
+	if planned.HeaderTitle != ".scratch" {
+		t.Fatalf("expected header title .scratch, got %q", planned.HeaderTitle)
+	}
+	if planned.BucketSourcePath != filepath.Join("shed", ".scratch") {
+		t.Fatalf("expected bucket source path %q, got %q", filepath.Join("shed", ".scratch"), planned.BucketSourcePath)
+	}
+	if planned.CompactShedBucket != filepath.Join("~", "Shed", "2026", "05", "shed", ".scratch") {
+		t.Fatalf("expected compact Shed bucket for May, got %q", planned.CompactShedBucket)
+	}
+	if planned.ShedBucket != filepath.Join(shedRoot, "2026", "05", "shed", ".scratch") {
+		t.Fatalf("expected actual Shed bucket for May, got %q", planned.ShedBucket)
+	}
+}
+
 func TestBucketSourcePathUsesInvocationFolderForSelectedInvocation(t *testing.T) {
 	invocation := filepath.Join("C:", "Users", "pavel", "Projects", "shed")
 

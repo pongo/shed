@@ -78,9 +78,8 @@ func TestRunSheddingUsesSameInvocationRelativeBucketInConfirmationAndSummary(t *
 	scanner := &recordingScanner{result: core.ScanResult{StaleItems: []core.StaleItem{{DisplayName: "old.txt"}}}}
 	shedding := &movingSheddingRunner{}
 	final := &recordingFinalRunner{}
-	mover := recordingBucketMover{shedRoot: shedRoot, now: now}
 
-	code := Run(context.Background(), baseOptions(cwd, &recordingPruner{}, scanner, shedding, final, withNow(now), withMover(mover), withResolver(fakeResolver{cwd: cwd, selected: selected})))
+	code := Run(context.Background(), baseOptions(cwd, &recordingPruner{}, scanner, shedding, final, withNow(now), withShedRoot(shedRoot), withMover(recordingBucketMover{}), withResolver(fakeResolver{cwd: cwd, selected: selected})))
 	if code != ExitOK {
 		t.Fatalf("expected ExitOK, got %d", code)
 	}
@@ -106,9 +105,8 @@ func TestRunSheddingKeepsOutsideInvocationBucketEndToEnd(t *testing.T) {
 	scanner := &recordingScanner{result: core.ScanResult{StaleItems: []core.StaleItem{{DisplayName: "old.txt"}}}}
 	shedding := &movingSheddingRunner{}
 	final := &recordingFinalRunner{}
-	mover := recordingBucketMover{shedRoot: shedRoot, now: now}
 
-	code := Run(context.Background(), baseOptions(cwd, &recordingPruner{}, scanner, shedding, final, withNow(now), withMover(mover), withResolver(fakeResolver{cwd: cwd, selected: selected})))
+	code := Run(context.Background(), baseOptions(cwd, &recordingPruner{}, scanner, shedding, final, withNow(now), withShedRoot(shedRoot), withMover(recordingBucketMover{}), withResolver(fakeResolver{cwd: cwd, selected: selected})))
 	if code != ExitOK {
 		t.Fatalf("expected ExitOK, got %d", code)
 	}
@@ -120,6 +118,40 @@ func TestRunSheddingKeepsOutsideInvocationBucketEndToEnd(t *testing.T) {
 	}
 	if final.request.Shedding.Summary.ShedBucket != wantActual {
 		t.Fatalf("expected actual summary bucket %q, got %q", wantActual, final.request.Shedding.Summary.ShedBucket)
+	}
+}
+
+func TestRunSheddingFreezesPlannedShedBucketForConfirmationAndSummary(t *testing.T) {
+	cwd := filepath.Join(t.TempDir(), "shed")
+	selected := filepath.Join(cwd, ".scratch")
+	shedRoot := filepath.Join(t.TempDir(), "Shed")
+	calls := 0
+	now := func() time.Time {
+		calls++
+		if calls == 1 {
+			return time.Date(2026, 5, 31, 23, 59, 0, 0, time.UTC)
+		}
+		return time.Date(2026, 6, 1, 0, 1, 0, 0, time.UTC)
+	}
+	scanner := &recordingScanner{result: core.ScanResult{StaleItems: []core.StaleItem{{DisplayName: "old.txt"}}}}
+	shedding := &movingSheddingRunner{}
+	final := &recordingFinalRunner{}
+
+	code := Run(context.Background(), baseOptions(cwd, &recordingPruner{}, scanner, shedding, final, withNow(now), withShedRoot(shedRoot), withMover(recordingBucketMover{}), withResolver(fakeResolver{cwd: cwd, selected: selected})))
+	if code != ExitOK {
+		t.Fatalf("expected ExitOK, got %d", code)
+	}
+
+	wantCompact := filepath.Join("~", "Shed", "2026", "05", "shed", ".scratch")
+	wantActual := filepath.Join(shedRoot, "2026", "05", "shed", ".scratch")
+	if shedding.confirmation.CompactShedBucket != wantCompact {
+		t.Fatalf("expected compact bucket %q, got %q", wantCompact, shedding.confirmation.CompactShedBucket)
+	}
+	if final.request.Shedding.Summary.ShedBucket != wantActual {
+		t.Fatalf("expected actual summary bucket %q, got %q", wantActual, final.request.Shedding.Summary.ShedBucket)
+	}
+	if calls != 1 {
+		t.Fatalf("expected one planned bucket clock read, got %d", calls)
 	}
 }
 
@@ -431,6 +463,10 @@ func withNow(now func() time.Time) optionMutator {
 	return func(opts *Options) { opts.Now = now }
 }
 
+func withShedRoot(shedRoot string) optionMutator {
+	return func(opts *Options) { opts.ShedRoot = shedRoot }
+}
+
 func withResolver(resolver SelectedFolderResolver) optionMutator {
 	return func(opts *Options) { opts.Resolver = resolver }
 }
@@ -442,6 +478,7 @@ func withMover(mover Mover) optionMutator {
 func baseOptions(cwd string, pruner Pruner, scanner Scanner, shedding SheddingRunner, final FinalRunner, mutators ...optionMutator) Options {
 	opts := Options{
 		InvocationFolder: cwd,
+		ShedRoot:         filepath.Join(cwd, "Shed"),
 		Stdout:           new(bytes.Buffer),
 		Stderr:           new(bytes.Buffer),
 		Resolver:         fakeResolver{cwd: cwd},
@@ -459,18 +496,21 @@ func baseOptions(cwd string, pruner Pruner, scanner Scanner, shedding SheddingRu
 
 type recordingMover struct{}
 
-func (recordingMover) Move(_ context.Context, _, selectedFolder string, _ core.ScanResult) (core.MoveSummary, error) {
-	return core.MoveSummary{ShedBucket: filepath.Join(selectedFolder, "Shed")}, nil
+func (recordingMover) Move(_ context.Context, _ string, planned core.PlannedShedBucket, _ core.ScanResult) (core.MoveSummary, error) {
+	return core.MoveSummary{ShedBucket: planned.ShedBucket}, nil
 }
 
 type recordingBucketMover struct {
-	shedRoot string
-	now      func() time.Time
+	shedBucket string
 }
 
-func (m recordingBucketMover) Move(_ context.Context, invocationFolder, selectedFolder string, _ core.ScanResult) (core.MoveSummary, error) {
+func (m recordingBucketMover) Move(_ context.Context, _ string, planned core.PlannedShedBucket, _ core.ScanResult) (core.MoveSummary, error) {
+	shedBucket := planned.ShedBucket
+	if m.shedBucket != "" {
+		shedBucket = m.shedBucket
+	}
 	return core.MoveSummary{
-		ShedBucket: core.ShedBucket(m.shedRoot, m.now(), invocationFolder, selectedFolder),
+		ShedBucket: shedBucket,
 	}, nil
 }
 

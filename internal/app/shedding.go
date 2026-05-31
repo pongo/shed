@@ -23,16 +23,17 @@ func runSheddingPhase(ctx context.Context, opts Options, invocationFolder, selec
 	}
 
 	shedding.Show = true
+	plannedBucket := core.PlanShedBucket(opts.ShedRoot, opts.Now(), invocationFolder, selectedFolder)
 	confirmation := ConfirmationRequest{
 		SelectedFolder:    selectedFolder,
-		HeaderTitle:       core.HeaderTitle(selectedFolder),
-		CompactShedBucket: core.CompactShedBucket(opts.Now(), invocationFolder, selectedFolder),
+		HeaderTitle:       plannedBucket.HeaderTitle,
+		CompactShedBucket: plannedBucket.CompactShedBucket,
 		ScanResult:        result,
 	}
 	sheddingResult, runErr := opts.Shedding.RunShedding(ctx, SheddingRequest{
 		Confirmation: confirmation,
 		Move: func(ctx context.Context) (core.MoveSummary, error) {
-			return opts.Mover.Move(ctx, invocationFolder, selectedFolder, result)
+			return opts.Mover.Move(ctx, selectedFolder, plannedBucket, result)
 		},
 		View: MoveViewData{
 			SkippedItems: result.SkippedItems,

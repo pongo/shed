@@ -64,6 +64,7 @@ func run(
 	return app.Run(ctx, app.Options{
 		Args:             cli.args,
 		InvocationFolder: invocationFolder,
+		ShedRoot:         shedRoot,
 		Stdout:           stdout,
 		Stderr:           stderr,
 		Resolver:         shedfs.SelectedFolderResolver{},
