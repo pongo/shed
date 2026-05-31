@@ -64,7 +64,10 @@ func defaultKeyMap() keyMap {
 func newConfirmationModel(request app.ConfirmationRequest) confirmationModel {
 	items := make([]list.Item, len(request.ScanResult.StaleItems))
 	for i, item := range request.ScanResult.StaleItems {
-		items[i] = staleListItem(item.DisplayName)
+		items[i] = staleListItem{
+			displayName: item.DisplayName,
+			kind:        item.Kind,
+		}
 	}
 
 	l := list.New(items, displayNameDelegate{}, 80, 10)
@@ -149,6 +152,7 @@ var headerStyle = lipgloss.NewStyle().
 	Foreground(lipgloss.Color("255"))
 
 var listItemStyle = lipgloss.NewStyle()
+var folderListItemStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("39"))
 
 func headerView(title string) string {
 	return headerStyle.Render(title)
@@ -162,10 +166,13 @@ func summaryView(request app.ConfirmationRequest) string {
 	return summary
 }
 
-type staleListItem string
+type staleListItem struct {
+	displayName string
+	kind        core.ItemKind
+}
 
 func (item staleListItem) FilterValue() string {
-	return string(item)
+	return item.displayName
 }
 
 type displayNameDelegate struct{}
@@ -183,5 +190,9 @@ func (displayNameDelegate) Update(tea.Msg, *list.Model) tea.Cmd {
 }
 
 func (displayNameDelegate) Render(w io.Writer, _ list.Model, _ int, item list.Item) {
-	_, _ = fmt.Fprint(w, listItemStyle.Render(listItemIndent+item.FilterValue()))
+	style := listItemStyle
+	if stale, ok := item.(staleListItem); ok && stale.kind == core.FolderItem {
+		style = folderListItemStyle
+	}
+	_, _ = fmt.Fprint(w, style.Render(listItemIndent+item.FilterValue()))
 }

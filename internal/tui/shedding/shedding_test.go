@@ -225,7 +225,7 @@ func TestViewRendersConfirmationText(t *testing.T) {
 	if !strings.Contains(view, "\n\n3 KB will be moved") {
 		t.Fatalf("expected blank space after header, got:\n%s", view)
 	}
-	if !strings.Contains(view, "Skipped items: 2.\n\n"+listItemStyle.Render("  old-folder")) {
+	if !strings.Contains(view, "Skipped items: 2.\n\n"+folderListItemStyle.Render("  old-folder")) {
 		t.Fatalf("expected blank space before list, got:\n%s", view)
 	}
 }
@@ -254,12 +254,16 @@ func TestViewUsesDisplayNamesOnly(t *testing.T) {
 	}
 }
 
-func TestListItemsRenderMuted(t *testing.T) {
+func TestListItemsRenderWithKindStyles(t *testing.T) {
 	view := newConfirmationModel(testRequest()).View().Content
-	want := listItemStyle.Render("  old-folder")
 
-	if !strings.Contains(view, want) {
-		t.Fatalf("expected muted list item %q, got:\n%s", want, view)
+	for _, want := range []string{
+		folderListItemStyle.Render("  old-folder"),
+		listItemStyle.Render("  old-file.txt"),
+	} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("expected styled list item %q, got:\n%s", want, view)
+		}
 	}
 }
 
