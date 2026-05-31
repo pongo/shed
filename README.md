@@ -15,7 +15,7 @@ Examples:
 ```powershell
 shed
 shed C:\Users\name\Downloads
-shed --age 0 .\docs\plans
+shed --age 0 docs\plans
 shed --age 30 .
 shed . --age 30
 shed --help
