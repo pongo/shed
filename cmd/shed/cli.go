@@ -3,8 +3,6 @@ package main
 import (
 	"fmt"
 	"io"
-	"path/filepath"
-	"strings"
 
 	flag "github.com/spf13/pflag"
 
@@ -59,26 +57,6 @@ func newCLIFlagSet(output io.Writer) *flag.FlagSet {
 
 func addCLIFlags(flags *flag.FlagSet, options *cliOptions) {
 	flags.IntVar(&options.retentionAgeDays, "age", options.retentionAgeDays, "minimum item age in whole days")
-}
-
-// normalizeFolderArgs removes quotes left behind by cmd.exe quoted path parsing
-// and cleans the selected folder path.
-//
-// Examples:
-//
-//	shed --age 0 "C:\Users\me\Downloads\Telegram Desktop2\"
-//	shed "C:\Users\me\Downloads\Telegram Desktop2\" --age 0
-//
-// can leave a literal quote in the folder argument, such as:
-//
-//	C:\Users\me\Downloads\Telegram Desktop2"
-//	C:\Users\me\Downloads\Telegram Desktop2\"
-func normalizeFolderArgs(args []string) []string {
-	normalized := make([]string, len(args))
-	for i, arg := range args {
-		normalized[i] = filepath.Clean(strings.ReplaceAll(arg, `"`, ""))
-	}
-	return normalized
 }
 
 func printCLIHelp(output io.Writer) {

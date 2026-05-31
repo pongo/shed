@@ -1,6 +1,9 @@
 package main
 
-import "strings"
+import (
+	"path/filepath"
+	"strings"
+)
 
 // repairPlatformArgs repairs cmd.exe argv after a quoted folder ending in a
 // backslash swallows the closing quote and fuses the following flags into the
@@ -29,4 +32,24 @@ func repairPlatformArgs(args []string) []string {
 		repaired = append(repaired, strings.Fields("--"+rest)...)
 	}
 	return repaired
+}
+
+// normalizeFolderArgs removes quotes left behind by cmd.exe quoted path parsing
+// and cleans the selected folder path.
+//
+// Examples:
+//
+//	shed --age 0 "C:\Users\me\Downloads\Telegram Desktop2\"
+//	shed "C:\Users\me\Downloads\Telegram Desktop2\" --age 0
+//
+// can leave a literal quote in the folder argument, such as:
+//
+//	C:\Users\me\Downloads\Telegram Desktop2"
+//	C:\Users\me\Downloads\Telegram Desktop2\"
+func normalizeFolderArgs(args []string) []string {
+	normalized := make([]string, len(args))
+	for i, arg := range args {
+		normalized[i] = filepath.Clean(strings.ReplaceAll(arg, `"`, ""))
+	}
+	return normalized
 }
