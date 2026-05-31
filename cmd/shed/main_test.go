@@ -139,36 +139,6 @@ func TestParseCLI(t *testing.T) {
 			wantArg: []string{"Downloads"},
 			wantAge: 0,
 		},
-		{
-			name:    "custom age before folder with cmd trailing slash quote",
-			args:    []string{"--age", "0", `C:\Users\pavel\Downloads\Telegram Desktop2"`},
-			wantArg: []string{`C:\Users\pavel\Downloads\Telegram Desktop2`},
-			wantAge: 0,
-		},
-		{
-			name:    "custom age after folder with cmd trailing slash quote",
-			args:    []string{`C:\Users\pavel\Downloads\Telegram Desktop2"`, "--age", "0"},
-			wantArg: []string{`C:\Users\pavel\Downloads\Telegram Desktop2`},
-			wantAge: 0,
-		},
-		{
-			name:    "folder with explicit current directory suffix",
-			args:    []string{`C:\Users\pavel\Downloads\Telegram Desktop2\.`},
-			wantArg: []string{`C:\Users\pavel\Downloads\Telegram Desktop2`},
-			wantAge: 60,
-		},
-		{
-			name:    "folder with quote before trailing slash",
-			args:    []string{`C:\Users\pavel\Downloads\Telegram Desktop2"\`},
-			wantArg: []string{`C:\Users\pavel\Downloads\Telegram Desktop2`},
-			wantAge: 60,
-		},
-		{
-			name:    "folder with escaped quote from cmd trailing slash",
-			args:    []string{`C:\Users\pavel\Downloads\Telegram Desktop2\"`},
-			wantArg: []string{`C:\Users\pavel\Downloads\Telegram Desktop2`},
-			wantAge: 60,
-		},
 	}
 
 	for _, tc := range cases {

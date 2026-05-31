@@ -19,8 +19,6 @@ func parseCLI(args []string, output io.Writer) (cliOptions, error) {
 		retentionAgeDays: core.DefaultRetentionAgeDays,
 	}
 
-	args = repairPlatformArgs(args)
-
 	flags := newCLIFlagSet(output)
 	addCLIFlags(flags, &options)
 
@@ -28,7 +26,7 @@ func parseCLI(args []string, output io.Writer) (cliOptions, error) {
 		return cliOptions{}, err
 	}
 
-	options.args = normalizeFolderArgs(flags.Args())
+	options.args = flags.Args()
 	if len(options.args) > 1 {
 		return cliOptions{}, fmt.Errorf("too many arguments")
 	}
