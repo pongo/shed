@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"shed/internal/core"
 )
@@ -45,6 +46,27 @@ func TestRunPruningNoOpFlowsToShedding(t *testing.T) {
 	}
 	if !pruner.scanCalled || !scanner.called || !shedding.called {
 		t.Fatalf("expected pruning scan then shedding path to run")
+	}
+}
+
+func TestRunSheddingConfirmationUsesInvocationRelativeBucketAndSelectedHeader(t *testing.T) {
+	cwd := filepath.Join(t.TempDir(), "shed")
+	selected := filepath.Join(cwd, ".scratch")
+	now := func() time.Time { return time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC) }
+	scanner := &recordingScanner{result: core.ScanResult{StaleItems: []core.StaleItem{{DisplayName: "old.txt"}}}}
+	shedding := &recordingSheddingRunner{outcome: SheddingCompleted}
+
+	code := Run(context.Background(), baseOptions(cwd, &recordingPruner{}, scanner, shedding, &recordingFinalRunner{}, withNow(now), withResolver(fakeResolver{cwd: cwd, selected: selected})))
+	if code != ExitOK {
+		t.Fatalf("expected ExitOK, got %d", code)
+	}
+
+	wantBucket := filepath.Join("~", "Shed", "2026", "05", "shed", ".scratch")
+	if shedding.request.Confirmation.CompactShedBucket != wantBucket {
+		t.Fatalf("expected compact bucket %q, got %q", wantBucket, shedding.request.Confirmation.CompactShedBucket)
+	}
+	if shedding.request.Confirmation.HeaderTitle != ".scratch" {
+		t.Fatalf("expected unchanged header title .scratch, got %q", shedding.request.Confirmation.HeaderTitle)
 	}
 }
 
@@ -286,13 +308,15 @@ func (s *recordingScanner) Scan(context.Context, string) (core.ScanResult, error
 
 type recordingSheddingRunner struct {
 	called  bool
+	request SheddingRequest
 	outcome SheddingOutcome
 	result  core.MoveSummary
 	err     error
 }
 
-func (r *recordingSheddingRunner) RunShedding(context.Context, SheddingRequest) (SheddingResult, error) {
+func (r *recordingSheddingRunner) RunShedding(_ context.Context, request SheddingRequest) (SheddingResult, error) {
 	r.called = true
+	r.request = request
 	return SheddingResult{Outcome: r.outcome, Summary: r.result}, r.err
 }
 
@@ -308,13 +332,17 @@ func (r *recordingFinalRunner) RunFinal(_ context.Context, request FinalSummaryR
 }
 
 type fakeResolver struct {
-	cwd string
-	err error
+	cwd      string
+	selected string
+	err      error
 }
 
 func (r fakeResolver) Resolve(arg string) (string, error) {
 	if r.err != nil {
 		return "", r.err
+	}
+	if r.selected != "" {
+		return r.selected, nil
 	}
 	if arg == "" || arg == "." {
 		return r.cwd, nil
@@ -336,16 +364,25 @@ func withStderr(stderr *bytes.Buffer) optionMutator {
 	return func(opts *Options) { opts.Stderr = stderr }
 }
 
+func withNow(now func() time.Time) optionMutator {
+	return func(opts *Options) { opts.Now = now }
+}
+
+func withResolver(resolver SelectedFolderResolver) optionMutator {
+	return func(opts *Options) { opts.Resolver = resolver }
+}
+
 func baseOptions(cwd string, pruner Pruner, scanner Scanner, shedding SheddingRunner, final FinalRunner, mutators ...optionMutator) Options {
 	opts := Options{
-		Stdout:   new(bytes.Buffer),
-		Stderr:   new(bytes.Buffer),
-		Resolver: fakeResolver{cwd: cwd},
-		Pruner:   pruner,
-		Scanner:  scanner,
-		Mover:    &recordingMover{},
-		Shedding: shedding,
-		Final:    final,
+		InvocationFolder: cwd,
+		Stdout:           new(bytes.Buffer),
+		Stderr:           new(bytes.Buffer),
+		Resolver:         fakeResolver{cwd: cwd},
+		Pruner:           pruner,
+		Scanner:          scanner,
+		Mover:            &recordingMover{},
+		Shedding:         shedding,
+		Final:            final,
 	}
 	for _, mutate := range mutators {
 		mutate(&opts)
@@ -355,7 +392,7 @@ func baseOptions(cwd string, pruner Pruner, scanner Scanner, shedding SheddingRu
 
 type recordingMover struct{}
 
-func (recordingMover) Move(_ context.Context, selectedFolder string, _ core.ScanResult) (core.MoveSummary, error) {
+func (recordingMover) Move(_ context.Context, _, selectedFolder string, _ core.ScanResult) (core.MoveSummary, error) {
 	return core.MoveSummary{ShedBucket: filepath.Join(selectedFolder, "Shed")}, nil
 }
 

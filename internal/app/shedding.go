@@ -6,7 +6,7 @@ import (
 	"shed/internal/core"
 )
 
-func runSheddingPhase(ctx context.Context, opts Options, selectedFolder string, pruning PruningFinalData) SheddingFinalData {
+func runSheddingPhase(ctx context.Context, opts Options, invocationFolder, selectedFolder string, pruning PruningFinalData) SheddingFinalData {
 	result, scanErr := opts.Scanner.Scan(ctx, selectedFolder)
 	shedding := SheddingFinalData{
 		SkippedItems: result.SkippedItems,
@@ -26,13 +26,13 @@ func runSheddingPhase(ctx context.Context, opts Options, selectedFolder string, 
 	confirmation := ConfirmationRequest{
 		SelectedFolder:    selectedFolder,
 		HeaderTitle:       core.HeaderTitle(selectedFolder),
-		CompactShedBucket: core.CompactShedBucket(opts.Now(), selectedFolder),
+		CompactShedBucket: core.CompactShedBucket(opts.Now(), invocationFolder, selectedFolder),
 		ScanResult:        result,
 	}
 	sheddingResult, runErr := opts.Shedding.RunShedding(ctx, SheddingRequest{
 		Confirmation: confirmation,
 		Move: func(ctx context.Context) (core.MoveSummary, error) {
-			return opts.Mover.Move(ctx, selectedFolder, result)
+			return opts.Mover.Move(ctx, invocationFolder, selectedFolder, result)
 		},
 		View: MoveViewData{
 			SkippedItems: result.SkippedItems,

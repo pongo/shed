@@ -24,7 +24,7 @@ func TestMoverRenamesFileIntoShedBucket(t *testing.T) {
 	source := filepath.Join(selected, "old.txt")
 	writeFile(t, source, "old")
 
-	summary, err := Mover{ShedRoot: shed, Now: func() time.Time { return now }}.Move(context.Background(), selected, core.ScanResult{
+	summary, err := Mover{ShedRoot: shed, Now: func() time.Time { return now }}.Move(context.Background(), selected, selected, core.ScanResult{
 		StaleItems: []core.StaleItem{{DisplayName: "old.txt", Path: source, Kind: core.FileItem, MoveSize: 3}},
 	})
 	if err != nil {
@@ -40,6 +40,34 @@ func TestMoverRenamesFileIntoShedBucket(t *testing.T) {
 	}
 	if summary.MovedSize != 3 {
 		t.Fatalf("expected moved size 3, got %d", summary.MovedSize)
+	}
+}
+
+func TestMoverUsesInvocationRelativeShedBucket(t *testing.T) {
+	now := time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)
+	root := t.TempDir()
+	invocation := filepath.Join(root, "shed")
+	selected := filepath.Join(invocation, ".scratch")
+	shed := filepath.Join(root, "Shed")
+	if err := os.MkdirAll(selected, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	source := filepath.Join(selected, "old.txt")
+	writeFile(t, source, "old")
+
+	summary, err := Mover{ShedRoot: shed, Now: func() time.Time { return now }}.Move(context.Background(), invocation, selected, core.ScanResult{
+		StaleItems: []core.StaleItem{{DisplayName: "old.txt", Path: source, Kind: core.FileItem, MoveSize: 3}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	target := filepath.Join(shed, "2026", "05", "shed", ".scratch", "old.txt")
+	if _, err := os.Stat(target); err != nil {
+		t.Fatalf("expected moved file at %q: %v", target, err)
+	}
+	if summary.ShedBucket != filepath.Dir(target) {
+		t.Fatalf("expected summary bucket %q, got %q", filepath.Dir(target), summary.ShedBucket)
 	}
 }
 
@@ -59,7 +87,7 @@ func TestMoverRenamesFileConflictWithNumberedSuffix(t *testing.T) {
 	source := filepath.Join(selected, "report.pdf")
 	writeFile(t, source, "new")
 
-	_, err := Mover{ShedRoot: shed, Now: func() time.Time { return now }}.Move(context.Background(), selected, core.ScanResult{
+	_, err := Mover{ShedRoot: shed, Now: func() time.Time { return now }}.Move(context.Background(), selected, selected, core.ScanResult{
 		StaleItems: []core.StaleItem{{DisplayName: "report.pdf", Path: source, Kind: core.FileItem, MoveSize: 3}},
 	})
 	if err != nil {
@@ -93,7 +121,7 @@ func TestMoverRenamesSymlinkConflictWithNumberedSuffix(t *testing.T) {
 	}
 	writeFile(t, filepath.Join(bucket, "shortcut"), "existing")
 
-	_, err := Mover{ShedRoot: shed, Now: func() time.Time { return now }}.Move(context.Background(), selected, core.ScanResult{
+	_, err := Mover{ShedRoot: shed, Now: func() time.Time { return now }}.Move(context.Background(), selected, selected, core.ScanResult{
 		StaleItems: []core.StaleItem{{DisplayName: "shortcut", Path: source, Kind: core.SymlinkItem}},
 	})
 	if err != nil {
@@ -126,7 +154,7 @@ func TestMoverMergesFolderConflictsRecursively(t *testing.T) {
 	writeFile(t, filepath.Join(selected, "project", "nested", "keep.txt"), "new")
 	writeFile(t, filepath.Join(selected, "project", "nested", "extra.txt"), "extra")
 
-	summary, err := Mover{ShedRoot: shed, Now: func() time.Time { return now }}.Move(context.Background(), selected, core.ScanResult{
+	summary, err := Mover{ShedRoot: shed, Now: func() time.Time { return now }}.Move(context.Background(), selected, selected, core.ScanResult{
 		StaleItems: []core.StaleItem{{DisplayName: "project", Path: filepath.Join(selected, "project"), Kind: core.FolderItem, MoveSize: 8}},
 	})
 	if err != nil {
@@ -160,7 +188,7 @@ func TestMoverReportsSpecificNestedFailedMoveInPartialMerge(t *testing.T) {
 	writeFile(t, locked, "locked")
 	lockFileNoDelete(t, locked)
 
-	summary, err := Mover{ShedRoot: shed, Now: func() time.Time { return now }}.Move(context.Background(), selected, core.ScanResult{
+	summary, err := Mover{ShedRoot: shed, Now: func() time.Time { return now }}.Move(context.Background(), selected, selected, core.ScanResult{
 		StaleItems: []core.StaleItem{{DisplayName: "project", Path: filepath.Join(selected, "project"), Kind: core.FolderItem, MoveSize: 6}},
 	})
 	if err != nil {
@@ -190,7 +218,7 @@ func TestMoverPreflightFailsWhenShedBucketIsFile(t *testing.T) {
 	source := filepath.Join(selected, "old.txt")
 	writeFile(t, source, "old")
 
-	_, err := Mover{ShedRoot: shed, Now: func() time.Time { return now }}.Move(context.Background(), selected, core.ScanResult{
+	_, err := Mover{ShedRoot: shed, Now: func() time.Time { return now }}.Move(context.Background(), selected, selected, core.ScanResult{
 		StaleItems: []core.StaleItem{{DisplayName: "old.txt", Path: source, Kind: core.FileItem, MoveSize: 3}},
 	})
 	if err == nil {
@@ -207,7 +235,7 @@ func TestMoverPreflightFailsWhenSelectedFolderIsMissing(t *testing.T) {
 	selected := filepath.Join(root, "Downloads")
 	source := filepath.Join(selected, "old.txt")
 
-	_, err := Mover{ShedRoot: filepath.Join(root, "Shed"), Now: func() time.Time { return now }}.Move(context.Background(), selected, core.ScanResult{
+	_, err := Mover{ShedRoot: filepath.Join(root, "Shed"), Now: func() time.Time { return now }}.Move(context.Background(), selected, selected, core.ScanResult{
 		StaleItems: []core.StaleItem{{DisplayName: "old.txt", Path: source, Kind: core.FileItem, MoveSize: 3}},
 	})
 	if err == nil {

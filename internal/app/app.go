@@ -15,17 +15,18 @@ const (
 )
 
 type Options struct {
-	Args     []string
-	Stdout   io.Writer
-	Stderr   io.Writer
-	Resolver SelectedFolderResolver
-	Pruner   Pruner
-	Pruning  PruningRunner
-	Scanner  Scanner
-	Mover    Mover
-	Shedding SheddingRunner
-	Final    FinalRunner
-	Now      func() time.Time
+	Args             []string
+	InvocationFolder string
+	Stdout           io.Writer
+	Stderr           io.Writer
+	Resolver         SelectedFolderResolver
+	Pruner           Pruner
+	Pruning          PruningRunner
+	Scanner          Scanner
+	Mover            Mover
+	Shedding         SheddingRunner
+	Final            FinalRunner
+	Now              func() time.Time
 }
 
 type SelectedFolderResolver interface {
@@ -37,7 +38,7 @@ type Scanner interface {
 }
 
 type Mover interface {
-	Move(ctx context.Context, selectedFolder string, scan core.ScanResult) (core.MoveSummary, error)
+	Move(ctx context.Context, invocationFolder, selectedFolder string, scan core.ScanResult) (core.MoveSummary, error)
 }
 type Pruner interface {
 	Scan(ctx context.Context) (core.PruneScanResult, error)
@@ -157,7 +158,12 @@ func Run(ctx context.Context, opts Options) int {
 		return ExitOK
 	}
 
-	shedding := runSheddingPhase(ctx, opts, selectedFolder, pruning)
+	invocationFolder := opts.InvocationFolder
+	if invocationFolder == "" {
+		invocationFolder = selectedFolder
+	}
+
+	shedding := runSheddingPhase(ctx, opts, invocationFolder, selectedFolder, pruning)
 
 	return runFinalPhase(ctx, opts, pruning, shedding)
 }
@@ -198,7 +204,7 @@ func withDefaults(opts Options) Options {
 
 type missingMover struct{}
 
-func (missingMover) Move(context.Context, string, core.ScanResult) (core.MoveSummary, error) {
+func (missingMover) Move(context.Context, string, string, core.ScanResult) (core.MoveSummary, error) {
 	return core.MoveSummary{}, fmt.Errorf("mover is not configured")
 }
 

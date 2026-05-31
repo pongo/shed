@@ -23,23 +23,71 @@ func TestHeaderTitleUsesCleanPathForFilesystemRoot(t *testing.T) {
 }
 
 func TestCompactShedBucket(t *testing.T) {
+	invocation := filepath.Join("C:", "Users", "pavel", "Downloads")
 	selected := filepath.Join("C:", "Users", "pavel", "Downloads")
 	moveDate := time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)
 	want := filepath.Join("~", "Shed", "2026", "05", "Downloads")
 
-	if got := CompactShedBucket(moveDate, selected); got != want {
+	if got := CompactShedBucket(moveDate, invocation, selected); got != want {
 		t.Fatalf("expected compact bucket %q, got %q", want, got)
 	}
 }
 
 func TestShedBucketUsesShedRootDateAndSelectedFolderBaseName(t *testing.T) {
 	shedRoot := filepath.Join("C:", "Users", "pavel", "Shed")
+	invocation := filepath.Join("C:", "Users", "pavel", "Projects")
 	selected := filepath.Join("D:", "Scratch", "Downloads")
 	moveDate := time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)
 	want := filepath.Join(shedRoot, "2026", "05", "Downloads")
 
-	if got := ShedBucket(shedRoot, moveDate, selected); got != want {
+	if got := ShedBucket(shedRoot, moveDate, invocation, selected); got != want {
 		t.Fatalf("expected bucket %q, got %q", want, got)
+	}
+}
+
+func TestBucketSourcePathUsesInvocationFolderForSelectedInvocation(t *testing.T) {
+	invocation := filepath.Join("C:", "Users", "pavel", "Projects", "shed")
+
+	if got := BucketSourcePath(invocation, invocation); got != "shed" {
+		t.Fatalf("expected invocation folder name, got %q", got)
+	}
+}
+
+func TestBucketSourcePathUsesInvocationRelativeSelectedDescendant(t *testing.T) {
+	invocation := filepath.Join("C:", "Users", "pavel", "Projects", "shed")
+	selected := filepath.Join(invocation, "docs", "plans")
+	want := filepath.Join("shed", "docs", "plans")
+
+	if got := BucketSourcePath(invocation, selected); got != want {
+		t.Fatalf("expected invocation-relative source path %q, got %q", want, got)
+	}
+}
+
+func TestBucketSourcePathNormalizesEquivalentSelectedPaths(t *testing.T) {
+	invocation := filepath.Join("C:", "Users", "pavel", "Projects", "shed")
+	first := filepath.Join(invocation, "docs", "plans")
+	second := filepath.Join(invocation, "docs", "..", "docs", "plans")
+
+	if got, want := BucketSourcePath(invocation, second), BucketSourcePath(invocation, first); got != want {
+		t.Fatalf("expected normalized equivalent source path %q, got %q", want, got)
+	}
+}
+
+func TestBucketSourcePathKeepsSelectedFolderNameOutsideInvocation(t *testing.T) {
+	invocation := filepath.Join("C:", "Users", "pavel", "Projects", "shed")
+	selected := filepath.Join("C:", "Users", "pavel", "Downloads")
+
+	if got := BucketSourcePath(invocation, selected); got != "Downloads" {
+		t.Fatalf("expected selected folder name, got %q", got)
+	}
+}
+
+func TestBucketSourcePathKeepsRootBehaviorForFilesystemRootInvocation(t *testing.T) {
+	invocation := filepath.Clean(`C:\`)
+	selected := filepath.Join(invocation, "Users", "pavel")
+
+	if got := BucketSourcePath(invocation, selected); got != "pavel" {
+		t.Fatalf("expected selected folder name for root invocation, got %q", got)
 	}
 }
 

@@ -22,12 +22,12 @@ func NewMover(shedRoot string) Mover {
 	}
 }
 
-func (mover Mover) Move(ctx context.Context, selectedFolder string, scan core.ScanResult) (core.MoveSummary, error) {
+func (mover Mover) Move(ctx context.Context, invocationFolder, selectedFolder string, scan core.ScanResult) (core.MoveSummary, error) {
 	if mover.Now == nil {
 		mover.Now = time.Now
 	}
 
-	bucket := core.ShedBucket(mover.ShedRoot, mover.Now(), selectedFolder)
+	bucket := core.ShedBucket(mover.ShedRoot, mover.Now(), invocationFolder, selectedFolder)
 	if err := preflight(selectedFolder, mover.ShedRoot, bucket); err != nil {
 		return core.MoveSummary{ShedBucket: bucket}, err
 	}

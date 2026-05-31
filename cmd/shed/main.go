@@ -55,12 +55,19 @@ func run(
 		return app.ExitError
 	}
 
+	invocationFolder, err := os.Getwd()
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "Invocation folder unavailable: %v\n", err)
+		return app.ExitError
+	}
+
 	return app.Run(ctx, app.Options{
-		Args:     cli.args,
-		Stdout:   stdout,
-		Stderr:   stderr,
-		Resolver: shedfs.SelectedFolderResolver{},
-		Pruner:   shedfs.NewPruner(shedRoot),
+		Args:             cli.args,
+		InvocationFolder: invocationFolder,
+		Stdout:           stdout,
+		Stderr:           stderr,
+		Resolver:         shedfs.SelectedFolderResolver{},
+		Pruner:           shedfs.NewPruner(shedRoot),
 		Pruning: pruning.Runner{
 			Input:  stdin,
 			Output: stdout,
