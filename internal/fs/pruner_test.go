@@ -70,6 +70,31 @@ func TestPrunerScanFindsEligibleMonthsWithCalculatedSizes(t *testing.T) {
 	}
 }
 
+func TestPrunerScanTreatsNestedBucketSourcePathsAsPartOfShedMonth(t *testing.T) {
+	now := time.Date(2026, 5, 15, 0, 0, 0, 0, time.UTC)
+	shedRoot := t.TempDir()
+	month := filepath.Join(shedRoot, "2025", "10")
+	createDir(t, filepath.Join(month, "shed", ".scratch"))
+	writePrunerFile(t, filepath.Join(month, "shed", ".scratch", "old.txt"), "old")
+
+	result, err := Pruner{
+		ShedRoot: shedRoot,
+		Now:      func() time.Time { return now },
+	}.Scan(context.Background())
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(result.Candidates) != 1 {
+		t.Fatalf("expected one eligible month, got %d", len(result.Candidates))
+	}
+	if result.Candidates[0].Month.Path != filepath.Join("~", "Shed", "2025", "10") {
+		t.Fatalf("unexpected candidate path: %s", result.Candidates[0].Month.Path)
+	}
+	if result.Candidates[0].Size != 3 {
+		t.Fatalf("expected nested bucket contents to count toward month size 3, got %d", result.Candidates[0].Size)
+	}
+}
+
 func TestPrunerScanIgnoresInvalidShedStructure(t *testing.T) {
 	now := time.Date(2026, 5, 15, 0, 0, 0, 0, time.UTC)
 	shedRoot := t.TempDir()

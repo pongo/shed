@@ -74,20 +74,21 @@ func TestMoverUsesInvocationRelativeShedBucket(t *testing.T) {
 func TestMoverRenamesFileConflictWithNumberedSuffix(t *testing.T) {
 	now := time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)
 	root := t.TempDir()
-	selected := filepath.Join(root, "Downloads")
+	invocation := filepath.Join(root, "shed")
+	selected := filepath.Join(invocation, ".scratch")
 	shed := filepath.Join(root, "Shed")
-	bucket := filepath.Join(shed, "2026", "05", "Downloads")
+	bucket := filepath.Join(shed, "2026", "05", "shed", ".scratch")
 	if err := os.MkdirAll(bucket, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Mkdir(selected, 0o700); err != nil {
+	if err := os.MkdirAll(selected, 0o700); err != nil {
 		t.Fatal(err)
 	}
 	writeFile(t, filepath.Join(bucket, "report.pdf"), "existing")
 	source := filepath.Join(selected, "report.pdf")
 	writeFile(t, source, "new")
 
-	_, err := Mover{ShedRoot: shed, Now: func() time.Time { return now }}.Move(context.Background(), selected, selected, core.ScanResult{
+	_, err := Mover{ShedRoot: shed, Now: func() time.Time { return now }}.Move(context.Background(), invocation, selected, core.ScanResult{
 		StaleItems: []core.StaleItem{{DisplayName: "report.pdf", Path: source, Kind: core.FileItem, MoveSize: 3}},
 	})
 	if err != nil {
@@ -103,13 +104,14 @@ func TestMoverRenamesFileConflictWithNumberedSuffix(t *testing.T) {
 func TestMoverRenamesSymlinkConflictWithNumberedSuffix(t *testing.T) {
 	now := time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)
 	root := t.TempDir()
-	selected := filepath.Join(root, "Downloads")
+	invocation := filepath.Join(root, "shed")
+	selected := filepath.Join(invocation, ".scratch")
 	shed := filepath.Join(root, "Shed")
-	bucket := filepath.Join(shed, "2026", "05", "Downloads")
+	bucket := filepath.Join(shed, "2026", "05", "shed", ".scratch")
 	if err := os.MkdirAll(bucket, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Mkdir(selected, 0o700); err != nil {
+	if err := os.MkdirAll(selected, 0o700); err != nil {
 		t.Fatal(err)
 	}
 
@@ -121,7 +123,7 @@ func TestMoverRenamesSymlinkConflictWithNumberedSuffix(t *testing.T) {
 	}
 	writeFile(t, filepath.Join(bucket, "shortcut"), "existing")
 
-	_, err := Mover{ShedRoot: shed, Now: func() time.Time { return now }}.Move(context.Background(), selected, selected, core.ScanResult{
+	_, err := Mover{ShedRoot: shed, Now: func() time.Time { return now }}.Move(context.Background(), invocation, selected, core.ScanResult{
 		StaleItems: []core.StaleItem{{DisplayName: "shortcut", Path: source, Kind: core.SymlinkItem}},
 	})
 	if err != nil {
@@ -141,9 +143,10 @@ func TestMoverRenamesSymlinkConflictWithNumberedSuffix(t *testing.T) {
 func TestMoverMergesFolderConflictsRecursively(t *testing.T) {
 	now := time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)
 	root := t.TempDir()
-	selected := filepath.Join(root, "Downloads")
+	invocation := filepath.Join(root, "shed")
+	selected := filepath.Join(invocation, ".scratch")
 	shed := filepath.Join(root, "Shed")
-	bucket := filepath.Join(shed, "2026", "05", "Downloads")
+	bucket := filepath.Join(shed, "2026", "05", "shed", ".scratch")
 	if err := os.MkdirAll(filepath.Join(bucket, "project", "nested"), 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -154,7 +157,7 @@ func TestMoverMergesFolderConflictsRecursively(t *testing.T) {
 	writeFile(t, filepath.Join(selected, "project", "nested", "keep.txt"), "new")
 	writeFile(t, filepath.Join(selected, "project", "nested", "extra.txt"), "extra")
 
-	summary, err := Mover{ShedRoot: shed, Now: func() time.Time { return now }}.Move(context.Background(), selected, selected, core.ScanResult{
+	summary, err := Mover{ShedRoot: shed, Now: func() time.Time { return now }}.Move(context.Background(), invocation, selected, core.ScanResult{
 		StaleItems: []core.StaleItem{{DisplayName: "project", Path: filepath.Join(selected, "project"), Kind: core.FolderItem, MoveSize: 8}},
 	})
 	if err != nil {
