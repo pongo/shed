@@ -1,19 +1,20 @@
 package core
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"strings"
 )
 
-type ShedMoveAction int
+type shedMoveAction int
 
 const (
-	MoveIntoShed ShedMoveAction = iota
-	MergeIntoExistingFolder
+	moveIntoShed shedMoveAction = iota
+	mergeIntoExistingFolder
 )
 
-type ShedMoveCandidate struct {
+type shedMoveCandidate struct {
 	Name string
 	Kind ItemKind
 }
@@ -23,9 +24,17 @@ type ShedMoveEntry struct {
 	Kind ItemKind
 }
 
-type ShedMoveDecision struct {
-	Action     ShedMoveAction
+type shedMoveDecision struct {
+	Action     shedMoveAction
 	TargetName string
+}
+
+type ShedMoveAdapter interface {
+	ListShedEntries(path string) ([]ShedMoveEntry, error)
+	MoveSize(path string, kind ItemKind) (int64, error)
+	Rename(source, target string) error
+	RemoveEmptyFolder(path string) error
+	JoinPath(base, name string) string
 }
 
 type MoveSummary struct {
@@ -34,20 +43,92 @@ type MoveSummary struct {
 	FailedPaths []string
 }
 
-func DecideShedMove(candidate ShedMoveCandidate, existing []ShedMoveEntry) ShedMoveDecision {
+func MoveIntoPlannedShedBucket(ctx context.Context, shedBucket string, staleItems []StaleItem, adapter ShedMoveAdapter) (MoveSummary, error) {
+	summary := NewMoveSummary(shedBucket)
+	for _, item := range staleItems {
+		if err := ctx.Err(); err != nil {
+			return summary, err
+		}
+		moveRootItem(item, shedBucket, adapter, &summary)
+	}
+	return summary, nil
+}
+
+func moveRootItem(item StaleItem, bucket string, adapter ShedMoveAdapter, summary *MoveSummary) {
+	decision := decideShedMove(shedMoveCandidate{
+		Name: item.DisplayName,
+		Kind: item.Kind,
+	}, existingEntries(bucket, adapter))
+	target := adapter.JoinPath(bucket, decision.TargetName)
+	if decision.Action == mergeIntoExistingFolder {
+		mergeFolder(item.Path, target, adapter, summary)
+		return
+	}
+
+	if err := adapter.Rename(item.Path, target); err != nil {
+		summary.RecordFailed(item.Path)
+		return
+	}
+	summary.RecordMoved(item.MoveSize)
+}
+
+func mergeFolder(source, target string, adapter ShedMoveAdapter, summary *MoveSummary) {
+	entries, err := adapter.ListShedEntries(source)
+	if err != nil {
+		summary.RecordFailed(source)
+		return
+	}
+
+	for _, entry := range entries {
+		sourcePath := adapter.JoinPath(source, entry.Name)
+		decision := decideShedMove(shedMoveCandidate{
+			Name: entry.Name,
+			Kind: entry.Kind,
+		}, existingEntries(target, adapter))
+		targetPath := adapter.JoinPath(target, decision.TargetName)
+
+		if decision.Action == mergeIntoExistingFolder {
+			mergeFolder(sourcePath, targetPath, adapter, summary)
+			continue
+		}
+
+		size, sizeErr := adapter.MoveSize(sourcePath, entry.Kind)
+		if sizeErr != nil {
+			summary.RecordFailed(sourcePath)
+			continue
+		}
+		if err := adapter.Rename(sourcePath, targetPath); err != nil {
+			summary.RecordFailed(sourcePath)
+			continue
+		}
+		summary.RecordMoved(size)
+	}
+
+	_ = adapter.RemoveEmptyFolder(source)
+}
+
+func existingEntries(path string, adapter ShedMoveAdapter) []ShedMoveEntry {
+	entries, err := adapter.ListShedEntries(path)
+	if err != nil {
+		return nil
+	}
+	return entries
+}
+
+func decideShedMove(candidate shedMoveCandidate, existing []ShedMoveEntry) shedMoveDecision {
 	if candidate.Kind == FolderItem {
 		for _, entry := range existing {
 			if entry.Kind == FolderItem && WindowsNameKey(entry.Name) == WindowsNameKey(candidate.Name) {
-				return ShedMoveDecision{
-					Action:     MergeIntoExistingFolder,
+				return shedMoveDecision{
+					Action:     mergeIntoExistingFolder,
 					TargetName: entry.Name,
 				}
 			}
 		}
 	}
 
-	return ShedMoveDecision{
-		Action:     MoveIntoShed,
+	return shedMoveDecision{
+		Action:     moveIntoShed,
 		TargetName: ResolveNumberedName(entryNames(existing), candidate.Name),
 	}
 }

@@ -25,16 +25,7 @@ func (mover Mover) Move(ctx context.Context, selectedFolder string, planned core
 		return core.MoveSummary{ShedBucket: bucket}, err
 	}
 
-	summary := core.NewMoveSummary(bucket)
-	for _, item := range scan.StaleItems {
-		if err := ctx.Err(); err != nil {
-			return summary, err
-		}
-
-		moveRootItem(item, bucket, &summary)
-	}
-
-	return summary, nil
+	return core.MoveIntoPlannedShedBucket(ctx, bucket, scan.StaleItems, moveAdapter{})
 }
 
 func preflight(selectedFolder, shedRoot, bucket string) error {
@@ -78,90 +69,14 @@ func ensureDirectory(path, label string) error {
 	return nil
 }
 
-func moveRootItem(item core.StaleItem, bucket string, summary *core.MoveSummary) {
-	decision := core.DecideShedMove(core.ShedMoveCandidate{
-		Name: item.DisplayName,
-		Kind: item.Kind,
-	}, shedEntries(bucket))
-	target := filepath.Join(bucket, decision.TargetName)
-	if decision.Action == core.MergeIntoExistingFolder {
-		mergeFolder(item.Path, target, summary)
-		return
-	}
+type moveAdapter struct{}
 
-	if err := os.Rename(item.Path, target); err != nil {
-		summary.RecordFailed(item.Path)
-		return
-	}
-	summary.RecordMoved(item.MoveSize)
-}
-
-func mergeFolder(source, target string, summary *core.MoveSummary) {
-	entries, err := os.ReadDir(source)
-	if err != nil {
-		summary.RecordFailed(source)
-		return
-	}
-
-	for _, entry := range entries {
-		sourcePath := filepath.Join(source, entry.Name())
-
-		info, err := os.Lstat(sourcePath)
-		if err != nil {
-			summary.RecordFailed(sourcePath)
-			continue
-		}
-
-		kind := core.FileItem
-		if info.Mode()&os.ModeSymlink != 0 {
-			kind = core.SymlinkItem
-		} else if info.IsDir() {
-			kind = core.FolderItem
-		}
-		decision := core.DecideShedMove(core.ShedMoveCandidate{
-			Name: entry.Name(),
-			Kind: kind,
-		}, shedEntries(target))
-		targetPath := filepath.Join(target, decision.TargetName)
-
-		if decision.Action == core.MergeIntoExistingFolder {
-			mergeFolder(sourcePath, targetPath, summary)
-			continue
-		}
-
-		if kind == core.FolderItem {
-			size, sizeErr := RecursiveSize(sourcePath)
-			if sizeErr != nil {
-				summary.RecordFailed(sourcePath)
-				continue
-			}
-			if err := os.Rename(sourcePath, targetPath); err != nil {
-				summary.RecordFailed(sourcePath)
-				continue
-			}
-			summary.RecordMoved(size)
-			continue
-		}
-
-		size := int64(0)
-		if kind != core.SymlinkItem {
-			size = info.Size()
-		}
-		if err := os.Rename(sourcePath, targetPath); err != nil {
-			summary.RecordFailed(sourcePath)
-			continue
-		}
-		summary.RecordMoved(size)
-	}
-
-	_ = os.Remove(source)
-}
-
-func shedEntries(dir string) []core.ShedMoveEntry {
+func (moveAdapter) ListShedEntries(dir string) ([]core.ShedMoveEntry, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return nil
+		return nil, err
 	}
+
 	moveEntries := make([]core.ShedMoveEntry, 0, len(entries))
 	for _, entry := range entries {
 		kind := core.FileItem
@@ -175,5 +90,31 @@ func shedEntries(dir string) []core.ShedMoveEntry {
 			Kind: kind,
 		})
 	}
-	return moveEntries
+	return moveEntries, nil
+}
+
+func (moveAdapter) MoveSize(path string, kind core.ItemKind) (int64, error) {
+	if kind == core.SymlinkItem {
+		return 0, nil
+	}
+	if kind == core.FolderItem {
+		return RecursiveSize(path)
+	}
+	info, err := os.Lstat(path)
+	if err != nil {
+		return 0, err
+	}
+	return info.Size(), nil
+}
+
+func (moveAdapter) Rename(source, target string) error {
+	return os.Rename(source, target)
+}
+
+func (moveAdapter) RemoveEmptyFolder(path string) error {
+	return os.Remove(path)
+}
+
+func (moveAdapter) JoinPath(base, name string) string {
+	return filepath.Join(base, name)
 }
