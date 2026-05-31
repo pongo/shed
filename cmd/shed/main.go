@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"strconv"
+	"strings"
 
 	"shed/internal/app"
 	"shed/internal/core"
@@ -54,12 +55,19 @@ func run(
 		return app.ExitError
 	}
 
+	invocationFolder, err := os.Getwd()
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "Invocation folder unavailable: %v\n", err)
+		return app.ExitError
+	}
+
 	return app.Run(ctx, app.Options{
-		Args:     cli.args,
-		Stdout:   stdout,
-		Stderr:   stderr,
-		Resolver: shedfs.SelectedFolderResolver{},
-		Pruner:   shedfs.NewPruner(shedRoot),
+		Args:             cli.args,
+		InvocationFolder: invocationFolder,
+		Stdout:           stdout,
+		Stderr:           stderr,
+		Resolver:         shedfs.SelectedFolderResolver{},
+		Pruner:           shedfs.NewPruner(shedRoot),
 		Pruning: pruning.Runner{
 			Input:  stdin,
 			Output: stdout,
@@ -93,7 +101,7 @@ func parseCLI(args []string) (cliOptions, error) {
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
 		if arg != "--age" {
-			options.args = append(options.args, arg)
+			options.args = append(options.args, normalizeFolderCLIArg(arg))
 			continue
 		}
 
@@ -117,6 +125,10 @@ func parseCLI(args []string) (cliOptions, error) {
 	}
 
 	return options, nil
+}
+
+func normalizeFolderCLIArg(arg string) string {
+	return strings.ReplaceAll(arg, `"`, "")
 }
 
 func printUsage(stderr io.Writer) {

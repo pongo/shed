@@ -59,7 +59,7 @@ func TestFinalSummaryRendersPruningErrors(t *testing.T) {
 }
 
 func TestFinalSummaryRendersSheddingMoveSummary(t *testing.T) {
-	bucket := filepath.Join("C:", "Users", "pavel", "Shed", "2026", "05", "Downloads")
+	bucket := filepath.Join("C:", "Users", "pavel", "Shed", "2026", "05", "shed", ".scratch")
 	view := formatFinalSummary(app.FinalSummaryRequest{
 		Shedding: app.SheddingFinalData{
 			Show: true,

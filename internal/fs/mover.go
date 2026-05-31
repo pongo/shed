@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
-	"strings"
 	"time"
 
 	"shed/internal/core"
@@ -24,12 +22,12 @@ func NewMover(shedRoot string) Mover {
 	}
 }
 
-func (mover Mover) Move(ctx context.Context, selectedFolder string, scan core.ScanResult) (core.MoveSummary, error) {
+func (mover Mover) Move(ctx context.Context, invocationFolder, selectedFolder string, scan core.ScanResult) (core.MoveSummary, error) {
 	if mover.Now == nil {
 		mover.Now = time.Now
 	}
 
-	bucket := core.ShedBucket(mover.ShedRoot, mover.Now(), selectedFolder)
+	bucket := core.ShedBucket(mover.ShedRoot, mover.Now(), invocationFolder, selectedFolder)
 	if err := preflight(selectedFolder, mover.ShedRoot, bucket); err != nil {
 		return core.MoveSummary{ShedBucket: bucket}, err
 	}
@@ -111,7 +109,6 @@ func mergeFolder(source, target string, summary *core.MoveSummary) {
 		summary.RecordFailed(source)
 		return
 	}
-	sortDirEntries(entries)
 
 	for _, entry := range entries {
 		sourcePath := filepath.Join(source, entry.Name())
@@ -186,15 +183,4 @@ func shedEntries(dir string) []core.ShedMoveEntry {
 		})
 	}
 	return moveEntries
-}
-
-func sortDirEntries(entries []os.DirEntry) {
-	sort.SliceStable(entries, func(i, j int) bool {
-		left := strings.ToLower(entries[i].Name())
-		right := strings.ToLower(entries[j].Name())
-		if left == right {
-			return entries[i].Name() < entries[j].Name()
-		}
-		return left < right
-	})
 }

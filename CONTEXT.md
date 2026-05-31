@@ -17,7 +17,7 @@ The **Shed** itself or any folder inside the Shed when used as the selected fold
 _Avoid_: Archive source, Self archive
 
 **Shed bucket**:
-A folder inside the **Shed** for items moved from a selected folder name during a calendar month, shaped as `~\Shed\<yyyy>\<MM>\<source-folder-name>`.
+A folder inside the **Shed** for items moved from a selected folder during a calendar month, shaped as `~\Shed\<yyyy>\<MM>\<bucket-source-path>`. When the Selected folder is the invocation folder or one of its descendants, based on their normalized absolute paths, and the invocation folder is not a filesystem root, the bucket source path starts with the invocation folder name and continues with the Selected folder's relative path from that folder. Otherwise, the bucket source path is the Selected folder name. shed does not guarantee that the bucket source path matches the selected folder's on-disk letter casing.
 _Avoid_: Archive bucket, archive destination
 
 **Shed month**:
