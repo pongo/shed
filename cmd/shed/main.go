@@ -23,7 +23,7 @@ func main() {
 		os.Stdin,
 		os.Stdout,
 		os.Stderr,
-		shedfs.UnsupportedPlatform,
+		unsupportedPlatform,
 		shedfs.UserShedRoot,
 	))
 }

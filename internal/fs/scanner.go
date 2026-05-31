@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"time"
 
 	"shed/internal/core"
@@ -117,8 +116,4 @@ func UserShedRoot() (string, error) {
 		return "", err
 	}
 	return ShedRootFromHome(home), nil
-}
-
-func UnsupportedPlatform() bool {
-	return runtime.GOOS != "windows"
 }
