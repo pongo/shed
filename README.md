@@ -16,13 +16,17 @@ Examples:
 shed
 shed C:\Users\name\Downloads
 shed --age 30 .\scratch
+shed --age 0 .
 shed . --age 0
+shed --help
 ```
 
 Arguments:
 
 - `folder`: folder to scan. Defaults to the current working directory.
 - `--age`: minimum item age in whole days. Defaults to `60`; `0` treats every eligible root item as stale. File age uses the modified date; folder age uses the creation date.
+
+Flags may be placed before or after the folder.
 
 ## What It Moves
 
