@@ -70,6 +70,59 @@ func TestRunSheddingConfirmationUsesInvocationRelativeBucketAndSelectedHeader(t 
 	}
 }
 
+func TestRunSheddingUsesSameInvocationRelativeBucketInConfirmationAndSummary(t *testing.T) {
+	cwd := filepath.Join(t.TempDir(), "shed")
+	selected := filepath.Join(cwd, ".scratch")
+	shedRoot := filepath.Join(t.TempDir(), "Shed")
+	now := func() time.Time { return time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC) }
+	scanner := &recordingScanner{result: core.ScanResult{StaleItems: []core.StaleItem{{DisplayName: "old.txt"}}}}
+	shedding := &movingSheddingRunner{}
+	final := &recordingFinalRunner{}
+	mover := recordingBucketMover{shedRoot: shedRoot, now: now}
+
+	code := Run(context.Background(), baseOptions(cwd, &recordingPruner{}, scanner, shedding, final, withNow(now), withMover(mover), withResolver(fakeResolver{cwd: cwd, selected: selected})))
+	if code != ExitOK {
+		t.Fatalf("expected ExitOK, got %d", code)
+	}
+
+	wantCompact := filepath.Join("~", "Shed", "2026", "05", "shed", ".scratch")
+	wantActual := filepath.Join(shedRoot, "2026", "05", "shed", ".scratch")
+	if shedding.confirmation.CompactShedBucket != wantCompact {
+		t.Fatalf("expected compact bucket %q, got %q", wantCompact, shedding.confirmation.CompactShedBucket)
+	}
+	if final.request.Shedding.Summary.ShedBucket != wantActual {
+		t.Fatalf("expected actual summary bucket %q, got %q", wantActual, final.request.Shedding.Summary.ShedBucket)
+	}
+	if shedding.confirmation.HeaderTitle != ".scratch" {
+		t.Fatalf("expected unchanged header title .scratch, got %q", shedding.confirmation.HeaderTitle)
+	}
+}
+
+func TestRunSheddingKeepsOutsideInvocationBucketEndToEnd(t *testing.T) {
+	cwd := filepath.Join(t.TempDir(), "shed")
+	selected := filepath.Join(t.TempDir(), "Downloads")
+	shedRoot := filepath.Join(t.TempDir(), "Shed")
+	now := func() time.Time { return time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC) }
+	scanner := &recordingScanner{result: core.ScanResult{StaleItems: []core.StaleItem{{DisplayName: "old.txt"}}}}
+	shedding := &movingSheddingRunner{}
+	final := &recordingFinalRunner{}
+	mover := recordingBucketMover{shedRoot: shedRoot, now: now}
+
+	code := Run(context.Background(), baseOptions(cwd, &recordingPruner{}, scanner, shedding, final, withNow(now), withMover(mover), withResolver(fakeResolver{cwd: cwd, selected: selected})))
+	if code != ExitOK {
+		t.Fatalf("expected ExitOK, got %d", code)
+	}
+
+	wantCompact := filepath.Join("~", "Shed", "2026", "05", "Downloads")
+	wantActual := filepath.Join(shedRoot, "2026", "05", "Downloads")
+	if shedding.confirmation.CompactShedBucket != wantCompact {
+		t.Fatalf("expected compact bucket %q, got %q", wantCompact, shedding.confirmation.CompactShedBucket)
+	}
+	if final.request.Shedding.Summary.ShedBucket != wantActual {
+		t.Fatalf("expected actual summary bucket %q, got %q", wantActual, final.request.Shedding.Summary.ShedBucket)
+	}
+}
+
 func TestRunPruningSkipFlowsToShedding(t *testing.T) {
 	cwd := t.TempDir()
 	pruner := &recordingPruner{scan: core.PruneScanResult{Candidates: []core.PruneCandidate{{Month: core.ShedMonth{Path: "m"}}}}}
@@ -320,6 +373,16 @@ func (r *recordingSheddingRunner) RunShedding(_ context.Context, request Sheddin
 	return SheddingResult{Outcome: r.outcome, Summary: r.result}, r.err
 }
 
+type movingSheddingRunner struct {
+	confirmation ConfirmationRequest
+}
+
+func (r *movingSheddingRunner) RunShedding(ctx context.Context, request SheddingRequest) (SheddingResult, error) {
+	r.confirmation = request.Confirmation
+	summary, err := request.Move(ctx)
+	return SheddingResult{Outcome: SheddingCompleted, Summary: summary}, err
+}
+
 type recordingFinalRunner struct {
 	called  bool
 	request FinalSummaryRequest
@@ -372,6 +435,10 @@ func withResolver(resolver SelectedFolderResolver) optionMutator {
 	return func(opts *Options) { opts.Resolver = resolver }
 }
 
+func withMover(mover Mover) optionMutator {
+	return func(opts *Options) { opts.Mover = mover }
+}
+
 func baseOptions(cwd string, pruner Pruner, scanner Scanner, shedding SheddingRunner, final FinalRunner, mutators ...optionMutator) Options {
 	opts := Options{
 		InvocationFolder: cwd,
@@ -394,6 +461,17 @@ type recordingMover struct{}
 
 func (recordingMover) Move(_ context.Context, _, selectedFolder string, _ core.ScanResult) (core.MoveSummary, error) {
 	return core.MoveSummary{ShedBucket: filepath.Join(selectedFolder, "Shed")}, nil
+}
+
+type recordingBucketMover struct {
+	shedRoot string
+	now      func() time.Time
+}
+
+func (m recordingBucketMover) Move(_ context.Context, invocationFolder, selectedFolder string, _ core.ScanResult) (core.MoveSummary, error) {
+	return core.MoveSummary{
+		ShedBucket: core.ShedBucket(m.shedRoot, m.now(), invocationFolder, selectedFolder),
+	}, nil
 }
 
 func TestNothingToMoveStillIncludesSkippedInSimpleOutput(t *testing.T) {
