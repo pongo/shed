@@ -16,7 +16,8 @@ import (
 func TestScannerFindsStaleRootFilesOnly(t *testing.T) {
 	now := time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)
 	selected := t.TempDir()
-	old := now.AddDate(0, 0, -core.RetentionDays)
+	retentionAgeDays := 60
+	old := now.AddDate(0, 0, -retentionAgeDays)
 
 	rootFile := filepath.Join(selected, "old.txt")
 	writeFile(t, rootFile, "root")
@@ -34,7 +35,7 @@ func TestScannerFindsStaleRootFilesOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	result, err := Scanner{Now: func() time.Time { return now }}.Scan(context.Background(), selected)
+	result, err := Scanner{Now: func() time.Time { return now }, RetentionAgeDays: &retentionAgeDays}.Scan(context.Background(), selected)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,7 +53,8 @@ func TestScannerFindsStaleRootFilesOnly(t *testing.T) {
 func TestScannerUsesFolderCreationTime(t *testing.T) {
 	now := time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)
 	selected := t.TempDir()
-	old := now.AddDate(0, 0, -core.RetentionDays)
+	retentionAgeDays := 60
+	old := now.AddDate(0, 0, -retentionAgeDays)
 
 	folder := filepath.Join(selected, "old-folder")
 	if err := os.Mkdir(folder, 0o700); err != nil {
@@ -61,7 +63,7 @@ func TestScannerUsesFolderCreationTime(t *testing.T) {
 	writeFile(t, filepath.Join(folder, "content.txt"), "content")
 	setCreationTime(t, folder, old)
 
-	result, err := Scanner{Now: func() time.Time { return now }}.Scan(context.Background(), selected)
+	result, err := Scanner{Now: func() time.Time { return now }, RetentionAgeDays: &retentionAgeDays}.Scan(context.Background(), selected)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,7 +81,7 @@ func TestScannerUsesFolderCreationTime(t *testing.T) {
 func TestScannerAppliesHiddenAndDotRules(t *testing.T) {
 	now := time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)
 	selected := t.TempDir()
-	old := now.AddDate(0, 0, -core.RetentionDays)
+	old := now.AddDate(0, 0, -60)
 
 	hidden := filepath.Join(selected, "hidden.txt")
 	writeOldFile(t, hidden, "hidden", old)
@@ -109,7 +111,7 @@ func TestScannerAppliesHiddenAndDotRules(t *testing.T) {
 func TestScannerTreatsSymlinkAsLeaf(t *testing.T) {
 	now := time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)
 	selected := t.TempDir()
-	old := now.AddDate(0, 0, -core.RetentionDays)
+	old := now.AddDate(0, 0, -60)
 
 	target := filepath.Join(selected, "target")
 	if err := os.Mkdir(target, 0o700); err != nil {

@@ -54,7 +54,7 @@ func newCLIFlagSet(output io.Writer) *flag.FlagSet {
 }
 
 func addCLIFlags(flags *flag.FlagSet, options *cliOptions) {
-	flags.IntVar(&options.retentionAgeDays, "age", options.retentionAgeDays, "minimum item age in whole days")
+	flags.IntVar(&options.retentionAgeDays, "age", options.retentionAgeDays, "minimum item age in whole days (default 0)")
 }
 
 func printCLIHelp(output io.Writer) {

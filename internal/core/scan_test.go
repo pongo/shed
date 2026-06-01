@@ -9,14 +9,14 @@ import (
 
 func TestScanRootItemsUsesRetentionBoundaryByKind(t *testing.T) {
 	now := time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)
-	boundary := now.AddDate(0, 0, -RetentionDays)
+	boundary := now.AddDate(0, 0, -60)
 
-	result := ScanRootItems([]RootItem{
+	result := ScanRootItemsWithRetentionAge([]RootItem{
 		{Name: "old-file.txt", Path: `C:\Work\old-file.txt`, Kind: FileItem, Modified: boundary, Size: 10},
 		{Name: "new-file.txt", Path: `C:\Work\new-file.txt`, Kind: FileItem, Modified: boundary.Add(time.Nanosecond), Size: 20},
 		{Name: "old-folder", Path: `C:\Work\old-folder`, Kind: FolderItem, Created: boundary, Modified: now, Size: 30},
 		{Name: "new-folder", Path: `C:\Work\new-folder`, Kind: FolderItem, Created: boundary.Add(time.Nanosecond), Size: 40},
-	}, now)
+	}, now, 60)
 
 	names := staleNames(result.StaleItems)
 	want := []string{"old-folder", "old-file.txt"}
@@ -60,9 +60,25 @@ func TestScanRootItemsTreatsAgeZeroAsAllEligibleItems(t *testing.T) {
 	}
 }
 
+func TestScanRootItemsDefaultsToAllEligibleItems(t *testing.T) {
+	now := time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)
+	future := now.AddDate(0, 0, 1)
+
+	result := ScanRootItems([]RootItem{
+		{Name: "future-file.txt", Path: `C:\Work\future-file.txt`, Kind: FileItem, Modified: future, Size: 10},
+		{Name: "future-folder", Path: `C:\Work\future-folder`, Kind: FolderItem, Created: future, Size: 20},
+	}, now)
+
+	names := staleNames(result.StaleItems)
+	want := []string{"future-folder", "future-file.txt"}
+	if !equalStrings(names, want) {
+		t.Fatalf("expected stale names %v, got %v", want, names)
+	}
+}
+
 func TestScanRootItemsAppliesEligibilityRules(t *testing.T) {
 	now := time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)
-	old := now.AddDate(0, 0, -RetentionDays)
+	old := now.AddDate(0, 0, -60)
 
 	result := ScanRootItems([]RootItem{
 		{Name: "hidden.txt", Path: `C:\Work\hidden.txt`, Kind: FileItem, Modified: old, Hidden: true, Size: 10},
@@ -83,7 +99,7 @@ func TestScanRootItemsAppliesEligibilityRules(t *testing.T) {
 
 func TestScanRootItemsRecordsSkippedItems(t *testing.T) {
 	now := time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)
-	old := now.AddDate(0, 0, -RetentionDays)
+	old := now.AddDate(0, 0, -60)
 	readErr := errors.New("access denied")
 
 	result := ScanRootItems([]RootItem{
@@ -104,7 +120,7 @@ func TestScanRootItemsRecordsSkippedItems(t *testing.T) {
 
 func TestScanRootItemsDoesNotSkipIneligibleItems(t *testing.T) {
 	now := time.Date(2026, 5, 28, 12, 0, 0, 0, time.UTC)
-	old := now.AddDate(0, 0, -RetentionDays)
+	old := now.AddDate(0, 0, -60)
 
 	result := ScanRootItems([]RootItem{
 		{Name: "hidden", Path: `C:\Work\hidden`, Kind: FolderItem, Created: old, Hidden: true, SizeErr: errors.New("access denied")},

@@ -125,7 +125,7 @@ func TestParseCLI(t *testing.T) {
 			name:    "default age",
 			args:    []string{"Downloads"},
 			wantArg: []string{"Downloads"},
-			wantAge: 60,
+			wantAge: 0,
 		},
 		{
 			name:    "custom age before folder",
@@ -228,5 +228,5 @@ Arguments:
       folder   folder to scan (defaults to current working directory)
 
 Flags:
-      --age int   minimum item age in whole days (default 60)
+      --age int   minimum item age in whole days (default 0)
 `

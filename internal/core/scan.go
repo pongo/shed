@@ -9,8 +9,7 @@ import (
 )
 
 const (
-	DefaultRetentionAgeDays = 60
-	RetentionDays           = DefaultRetentionAgeDays
+	DefaultRetentionAgeDays = 0
 )
 
 type ItemKind int

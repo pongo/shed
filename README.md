@@ -7,7 +7,7 @@ It is meant for quick, reversible cleanup of busy folders such as Downloads. Bef
 ## Usage
 
 ```powershell
-shed [--age days=60] [folder]
+shed [--age days=0] [folder]
 ```
 
 Examples:
@@ -24,7 +24,7 @@ shed --help
 Arguments:
 
 - `folder`: folder to scan. Defaults to the current working directory.
-- `--age`: minimum item age in whole days. Defaults to `60`; `0` treats every eligible root item as stale. File age uses the modified date; folder age uses the creation date.
+- `--age`: minimum item age in whole days. Defaults to `0`, which treats every eligible root item as stale. Positive values use the file modified date and folder creation date.
 
 Flags may be placed before or after the folder.
 

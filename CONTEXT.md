@@ -97,7 +97,7 @@ A direct child of the selected folder. Items nested inside root folders are not 
 _Avoid_: Entry, child
 
 **Stale item**:
-A **Root item** that is eligible to be moved into the **Shed** because it is at least the configured retention age old at the retention boundary. The default retention age is 60 days.
+A **Root item** that is eligible to be moved into the **Shed** because it is at least the configured retention age old at the retention boundary. The default retention age is 0 days.
 _Avoid_: Old item, expired item
 
 **Retention age**:
