@@ -52,3 +52,7 @@ At startup, shed checks for Shed months older than six months. If any are found,
 go build ./cmd/shed
 go test ./...
 ```
+
+## Related
+
+- [big](https://github.com/pongo/big) — Terminal utility for finding the largest immediate entries inside a folder. `Go`
