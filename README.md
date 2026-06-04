@@ -1,8 +1,11 @@
 # shed
 
-shed is a Windows-only console utility that moves stale root items from a selected folder into `~\Shed`.
+shed is a console utility that moves stale root items from a selected folder into `~\Shed`.
 
 It is meant for quick, reversible cleanup of busy folders such as Downloads. Before moving anything, shed shows an interactive confirmation screen with the items and total size.
+
+> [!IMPORTANT]  
+> Windows-only. I'm sorry. Please write the code for your OS yourself. You might want to take a look at the `_windows.go` files.
 
 ## Usage
 
