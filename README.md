@@ -45,6 +45,9 @@ Moved items are placed under:
 
 If a file or symlink name already exists in the target Shed bucket, shed adds a numbered suffix. If a folder name already exists, shed merges the folder contents using the same conflict rules recursively.
 
+> [!NOTE]
+> This only works on the system drive.
+
 ## Shed Pruning
 
 At startup, shed checks for Shed months older than six months. If any are found, it asks whether to send those months to the Recycle Bin before continuing with shedding.
