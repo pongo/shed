@@ -102,6 +102,7 @@ func (m model) updateConfirmation(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch m.confirmation.Result() {
 	case confirmationConfirmed:
+		m.moving.scan = m.confirmation.SelectedScanResult()
 		m.phase = phaseMoving
 		return m, tea.Batch(cmd, m.moving.Init())
 	case confirmationCancelled:

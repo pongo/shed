@@ -2,7 +2,7 @@
 
 shed is a console utility that moves stale root items from a selected folder into `~\Shed`.
 
-It is meant for quick, reversible cleanup of busy folders such as Downloads. Before moving anything, shed shows an interactive confirmation screen with the items and total size.
+It is meant for quick, reversible cleanup of busy folders such as Downloads. Before moving anything, shed shows an interactive confirmation screen with the selected items and total size.
 
 > [!IMPORTANT]  
 > Windows-only. I'm sorry. Please write the code for your OS yourself. You might want to take a look at the `_windows.go` files.
@@ -36,6 +36,8 @@ Flags may be placed before or after the folder.
 shed scans only direct children of the selected folder. Nested files are moved only when their root folder is moved.
 
 It skips hidden items and items whose metadata or size cannot be read safely.
+
+On the confirmation screen, all stale items are selected by default. Press `space` to select or deselect the focused item, or `a` to select or deselect all items.
 
 Moved items are placed under:
 

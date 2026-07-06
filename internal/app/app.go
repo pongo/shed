@@ -46,7 +46,7 @@ type Pruner interface {
 	Prune(ctx context.Context, scan core.PruneScanResult) (core.PruneSummary, error)
 }
 
-type MoveFunc func(ctx context.Context) (core.MoveSummary, error)
+type MoveFunc func(ctx context.Context, scan core.ScanResult) (core.MoveSummary, error)
 type PruneFunc func(ctx context.Context) (core.PruneSummary, error)
 
 type SheddingRunner interface {
@@ -212,7 +212,7 @@ func (missingMover) Move(context.Context, string, core.PlannedShedBucket, core.S
 type passthroughSheddingRunner struct{}
 
 func (passthroughSheddingRunner) RunShedding(ctx context.Context, request SheddingRequest) (SheddingResult, error) {
-	summary, err := request.Move(ctx)
+	summary, err := request.Move(ctx, request.Confirmation.ScanResult)
 	return SheddingResult{
 		Outcome: SheddingCompleted,
 		Summary: summary,

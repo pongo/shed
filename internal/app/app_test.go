@@ -411,7 +411,7 @@ type movingSheddingRunner struct {
 
 func (r *movingSheddingRunner) RunShedding(ctx context.Context, request SheddingRequest) (SheddingResult, error) {
 	r.confirmation = request.Confirmation
-	summary, err := request.Move(ctx)
+	summary, err := request.Move(ctx, request.Confirmation.ScanResult)
 	return SheddingResult{Outcome: SheddingCompleted, Summary: summary}, err
 }
 

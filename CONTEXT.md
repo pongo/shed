@@ -33,7 +33,7 @@ The cleanup step that sends **Shed months** older than six months to the Recycle
 _Avoid_: Archive pruning, Archive cleanup, pruning
 
 **Shedding**:
-The phase that moves confirmed **Stale items** from the **Selected folder** into a **Shed bucket**.
+The phase that moves confirmed **Selected stale items** from the **Selected folder** into a **Shed bucket**.
 _Avoid_: Archiving
 
 **Shed item**:
@@ -99,6 +99,10 @@ _Avoid_: Entry, child
 **Stale item**:
 A **Root item** that is eligible to be moved into the **Shed** because it is at least the configured retention age old at the retention boundary. The default retention age is 0 days.
 _Avoid_: Old item, expired item
+
+**Selected stale item**:
+A **Stale item** that the user leaves selected for **Shedding** in the confirmation view. Stale items that are not selected remain in the **Selected folder** and are not **Skipped items** or **Failed moves**.
+_Avoid_: Chosen file, included item
 
 **Retention age**:
 The minimum age in whole days that an eligible **Root item** must reach before shed treats it as a **Stale item**. A retention age of 0 means every eligible Root item is stale, regardless of timestamp.

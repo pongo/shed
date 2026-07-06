@@ -28,6 +28,52 @@ func TestModelConfirmsWithYAndEnter(t *testing.T) {
 	}
 }
 
+func TestModelDoesNotConfirmWithEmptySelection(t *testing.T) {
+	model := newConfirmationModel(testRequest())
+
+	updated, _ := model.Update(keyPress("a"))
+	updated, _ = updated.(confirmationModel).Update(enterPress())
+	confirmation := updated.(confirmationModel)
+
+	if confirmation.Result() != confirmationNone {
+		t.Fatalf("expected empty selection to stay unconfirmed, got %v", confirmation.Result())
+	}
+	if !strings.Contains(confirmation.View().Content, "0 B will be moved") {
+		t.Fatalf("expected empty selection size in view, got:\n%s", confirmation.View().Content)
+	}
+}
+
+func TestModelTogglesFocusedItemSelection(t *testing.T) {
+	model := newConfirmationModel(testRequest())
+
+	updated, _ := model.Update(spacePress())
+	confirmation := updated.(confirmationModel)
+	selected := confirmation.SelectedScanResult()
+
+	if len(selected.StaleItems) != 1 || selected.StaleItems[0].DisplayName != "old-file.txt" {
+		t.Fatalf("expected only old-file.txt selected, got %+v", selected.StaleItems)
+	}
+	if selected.MoveSize != 1024 {
+		t.Fatalf("expected selected move size 1024, got %d", selected.MoveSize)
+	}
+}
+
+func TestModelTogglesAllItemsByAggregateState(t *testing.T) {
+	model := newConfirmationModel(testRequest())
+
+	updated, _ := model.Update(keyPress("a"))
+	confirmation := updated.(confirmationModel)
+	if len(confirmation.SelectedScanResult().StaleItems) != 0 {
+		t.Fatalf("expected all items deselected")
+	}
+
+	updated, _ = confirmation.Update(keyPress("a"))
+	confirmation = updated.(confirmationModel)
+	if len(confirmation.SelectedScanResult().StaleItems) != 2 {
+		t.Fatalf("expected all items selected")
+	}
+}
+
 func TestModelCancelsWithConfiguredKeys(t *testing.T) {
 	for _, msg := range []tea.KeyPressMsg{keyPress("n"), keyPress("q"), escapePress(), ctrlCPress()} {
 		model := newConfirmationModel(testRequest())
@@ -111,7 +157,7 @@ func TestRunnerReturnsSummaryWithoutPrintingFinalOutput(t *testing.T) {
 		Output: output,
 	}).RunShedding(ctx, app.SheddingRequest{
 		Confirmation: testRequest(),
-		Move: func(context.Context) (core.MoveSummary, error) {
+		Move: func(context.Context, core.ScanResult) (core.MoveSummary, error) {
 			return core.MoveSummary{MovedSize: 10, ShedBucket: bucket}, nil
 		},
 		View: app.MoveViewData{},
@@ -143,7 +189,7 @@ func TestRunnerReturnsMoveErrorWithoutPrinting(t *testing.T) {
 		Output: output,
 	}).RunShedding(ctx, app.SheddingRequest{
 		Confirmation: testRequest(),
-		Move: func(context.Context) (core.MoveSummary, error) {
+		Move: func(context.Context, core.ScanResult) (core.MoveSummary, error) {
 			return core.MoveSummary{}, errors.New("selected folder unavailable")
 		},
 		View: app.MoveViewData{},
@@ -177,6 +223,37 @@ func TestRunnerReturnsCancelledOutcomeForAllCancelKeys(t *testing.T) {
 		if result.Outcome != app.SheddingCancelled {
 			t.Fatalf("expected cancelled outcome for input %q, got %v", input, result.Outcome)
 		}
+	}
+}
+
+func TestRunnerMovesOnlySelectedItems(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	var moved core.ScanResult
+
+	result, err := (Runner{
+		Input:  strings.NewReader("a \r"),
+		Output: new(bytes.Buffer),
+	}).RunShedding(ctx, app.SheddingRequest{
+		Confirmation: testRequest(),
+		Move: func(_ context.Context, scan core.ScanResult) (core.MoveSummary, error) {
+			moved = scan
+			return core.MoveSummary{MovedSize: scan.MoveSize}, nil
+		},
+		View: app.MoveViewData{},
+	})
+
+	if err != nil {
+		t.Fatalf("expected runner to finish without error, got %v", err)
+	}
+	if result.Outcome != app.SheddingCompleted {
+		t.Fatalf("expected completed outcome, got %v", result.Outcome)
+	}
+	if len(moved.StaleItems) != 1 || moved.StaleItems[0].DisplayName != "old-folder" {
+		t.Fatalf("expected only old-folder to move, got %+v", moved.StaleItems)
+	}
+	if moved.MoveSize != 2048 {
+		t.Fatalf("expected selected move size 2048, got %d", moved.MoveSize)
 	}
 }
 
@@ -225,7 +302,7 @@ func TestViewRendersConfirmationText(t *testing.T) {
 	if !strings.Contains(view, "\n\n3 KB will be moved") {
 		t.Fatalf("expected blank space after header, got:\n%s", view)
 	}
-	if !strings.Contains(view, "Skipped items: 2.\n\n"+folderListItemStyle.Render("  old-folder")) {
+	if !strings.Contains(view, "Skipped items: 2.\n\n"+currentListItemStyle.Render("  [x] old-folder")) {
 		t.Fatalf("expected blank space before list, got:\n%s", view)
 	}
 }
@@ -241,7 +318,7 @@ func TestViewDoesNotUseAltScreen(t *testing.T) {
 func TestViewUsesDisplayNamesOnly(t *testing.T) {
 	view := newConfirmationModel(testRequest()).View().Content
 
-	for _, want := range []string{"  old-folder", "  old-file.txt"} {
+	for _, want := range []string{"  [x] old-folder", "  [x] old-file.txt"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("expected indented list item %q, got:\n%s", want, view)
 		}
@@ -255,15 +332,45 @@ func TestViewUsesDisplayNamesOnly(t *testing.T) {
 }
 
 func TestListItemsRenderWithKindStyles(t *testing.T) {
-	view := newConfirmationModel(testRequest()).View().Content
+	model := newConfirmationModel(testRequest())
+	model.list.Select(1)
+	view := model.View().Content
 
 	for _, want := range []string{
-		folderListItemStyle.Render("  old-folder"),
-		listItemStyle.Render("  old-file.txt"),
+		folderListItemStyle.Render("  [x] old-folder"),
+		currentListItemStyle.Render("  [x] old-file.txt"),
 	} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("expected styled list item %q, got:\n%s", want, view)
 		}
+	}
+}
+
+func TestListItemsRenderUnselectedItemsGray(t *testing.T) {
+	model := newConfirmationModel(testRequest())
+	model.list.Select(1)
+
+	updated, _ := model.Update(spacePress())
+	view := updated.(confirmationModel).View().Content
+
+	if !strings.Contains(view, currentListItemStyle.Render("  [ ] old-file.txt")) {
+		t.Fatalf("expected current unselected item to render with cursor color, got:\n%s", view)
+	}
+	if !strings.Contains(view, "2 KB will be moved") {
+		t.Fatalf("expected selected size in summary, got:\n%s", view)
+	}
+}
+
+func TestListItemsRenderUnselectedInactiveItemsGray(t *testing.T) {
+	model := newConfirmationModel(testRequest())
+
+	updated, _ := model.Update(spacePress())
+	confirmation := updated.(confirmationModel)
+	confirmation.list.Select(1)
+	view := confirmation.View().Content
+
+	if !strings.Contains(view, unselectedListItemStyle.Render("  [ ] old-folder")) {
+		t.Fatalf("expected inactive unselected item to render gray, got:\n%s", view)
 	}
 }
 
@@ -279,7 +386,7 @@ func TestWindowResizeUpdatesListHeight(t *testing.T) {
 }
 
 func TestMovingModelRendersSpinnerState(t *testing.T) {
-	model := newMovingModel(context.Background(), func(context.Context) (core.MoveSummary, error) {
+	model := newMovingModel(context.Background(), func(context.Context, core.ScanResult) (core.MoveSummary, error) {
 		return core.MoveSummary{}, nil
 	}, app.MoveViewData{})
 
@@ -292,7 +399,7 @@ func TestMovingModelRendersSpinnerState(t *testing.T) {
 func testSheddingRequest() app.SheddingRequest {
 	return app.SheddingRequest{
 		Confirmation: testRequest(),
-		Move: func(context.Context) (core.MoveSummary, error) {
+		Move: func(context.Context, core.ScanResult) (core.MoveSummary, error) {
 			return core.MoveSummary{}, nil
 		},
 		View: app.MoveViewData{},
@@ -324,6 +431,10 @@ func keyPress(text string) tea.KeyPressMsg {
 
 func enterPress() tea.KeyPressMsg {
 	return tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter})
+}
+
+func spacePress() tea.KeyPressMsg {
+	return tea.KeyPressMsg(tea.Key{Code: tea.KeySpace})
 }
 
 func escapePress() tea.KeyPressMsg {

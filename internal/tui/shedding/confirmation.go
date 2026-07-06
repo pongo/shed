@@ -36,12 +36,14 @@ type confirmationModel struct {
 const listItemIndent = "  "
 
 type keyMap struct {
-	Confirm key.Binding
-	Cancel  key.Binding
+	Confirm   key.Binding
+	Toggle    key.Binding
+	ToggleAll key.Binding
+	Cancel    key.Binding
 }
 
 func (k keyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Confirm, k.Cancel}
+	return []key.Binding{k.Confirm, k.Toggle, k.ToggleAll, k.Cancel}
 }
 
 func (k keyMap) FullHelp() [][]key.Binding {
@@ -54,6 +56,14 @@ func defaultKeyMap() keyMap {
 			key.WithKeys("y", "enter"),
 			key.WithHelp("y/enter", "confirm"),
 		),
+		Toggle: key.NewBinding(
+			key.WithKeys("space", " "),
+			key.WithHelp("space", "toggle"),
+		),
+		ToggleAll: key.NewBinding(
+			key.WithKeys("a"),
+			key.WithHelp("a", "all"),
+		),
 		Cancel: key.NewBinding(
 			key.WithKeys("n", "q", "esc", "ctrl+c"),
 			key.WithHelp("n/q/esc", "cancel"),
@@ -65,8 +75,8 @@ func newConfirmationModel(request app.ConfirmationRequest) confirmationModel {
 	items := make([]list.Item, len(request.ScanResult.StaleItems))
 	for i, item := range request.ScanResult.StaleItems {
 		items[i] = staleListItem{
-			displayName: item.DisplayName,
-			kind:        item.Kind,
+			stale:    item,
+			selected: true,
 		}
 	}
 
@@ -101,8 +111,15 @@ func (m confirmationModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyPressMsg:
 		switch {
 		case key.Matches(msg, m.keys.Confirm):
+			if !m.hasSelectedItems() {
+				return m, nil
+			}
 			m.result = confirmationConfirmed
 			return m, nil
+		case key.Matches(msg, m.keys.Toggle):
+			return m.toggleFocusedItem()
+		case key.Matches(msg, m.keys.ToggleAll):
+			return m.toggleAllItems()
 		case key.Matches(msg, m.keys.Cancel) || isCtrlC(msg):
 			m.result = confirmationCancelled
 			return m, nil
@@ -123,7 +140,7 @@ func (m confirmationModel) View() tea.View {
 	var parts []string
 	parts = append(parts, headerView(m.request.HeaderTitle))
 	parts = append(parts, "")
-	parts = append(parts, summaryView(m.request))
+	parts = append(parts, summaryView(m.request, m.selectedMoveSize()))
 	parts = append(parts, "")
 	parts = append(parts, m.list.View())
 	parts = append(parts, m.help.View(m.keys))
@@ -136,6 +153,61 @@ func (m confirmationModel) Result() confirmationResult {
 
 func (m confirmationModel) ListHeight() int {
 	return m.list.Height()
+}
+
+func (m confirmationModel) SelectedScanResult() core.ScanResult {
+	result := core.ScanResult{
+		SkippedItems: m.request.ScanResult.SkippedItems,
+	}
+	for _, item := range m.list.Items() {
+		stale, ok := item.(staleListItem)
+		if !ok || !stale.selected {
+			continue
+		}
+		result.StaleItems = append(result.StaleItems, stale.stale)
+		result.MoveSize += stale.stale.MoveSize
+	}
+	return result
+}
+
+func (m confirmationModel) selectedMoveSize() int64 {
+	return m.SelectedScanResult().MoveSize
+}
+
+func (m confirmationModel) hasSelectedItems() bool {
+	for _, item := range m.list.Items() {
+		stale, ok := item.(staleListItem)
+		if ok && stale.selected {
+			return true
+		}
+	}
+	return false
+}
+
+func (m confirmationModel) toggleFocusedItem() (tea.Model, tea.Cmd) {
+	index := m.list.Index()
+	item, ok := m.list.SelectedItem().(staleListItem)
+	if !ok {
+		return m, nil
+	}
+	item.selected = !item.selected
+	return m, m.list.SetItem(index, item)
+}
+
+func (m confirmationModel) toggleAllItems() (tea.Model, tea.Cmd) {
+	selectAll := !m.hasSelectedItems()
+	items := m.list.Items()
+	updated := make([]list.Item, len(items))
+	for i, item := range items {
+		stale, ok := item.(staleListItem)
+		if !ok {
+			updated[i] = item
+			continue
+		}
+		stale.selected = selectAll
+		updated[i] = stale
+	}
+	return m, m.list.SetItems(updated)
 }
 
 func listHeight(windowHeight int) int {
@@ -153,13 +225,15 @@ var headerStyle = lipgloss.NewStyle().
 
 var listItemStyle = lipgloss.NewStyle()
 var folderListItemStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("39"))
+var unselectedListItemStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+var currentListItemStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("170"))
 
 func headerView(title string) string {
 	return headerStyle.Render(title)
 }
 
-func summaryView(request app.ConfirmationRequest) string {
-	summary := fmt.Sprintf("%s will be moved to %s. Press y/enter to confirm.", core.FormatSize(request.ScanResult.MoveSize), request.CompactShedBucket)
+func summaryView(request app.ConfirmationRequest, moveSize int64) string {
+	summary := fmt.Sprintf("%s will be moved to %s. Press y/enter to confirm.", core.FormatSize(moveSize), request.CompactShedBucket)
 	if skipped := len(request.ScanResult.SkippedItems); skipped > 0 {
 		summary = fmt.Sprintf("%s Skipped items: %d.", summary, skipped)
 	}
@@ -167,12 +241,12 @@ func summaryView(request app.ConfirmationRequest) string {
 }
 
 type staleListItem struct {
-	displayName string
-	kind        core.ItemKind
+	stale    core.StaleItem
+	selected bool
 }
 
 func (item staleListItem) FilterValue() string {
-	return item.displayName
+	return item.stale.DisplayName
 }
 
 type displayNameDelegate struct{}
@@ -189,10 +263,19 @@ func (displayNameDelegate) Update(tea.Msg, *list.Model) tea.Cmd {
 	return nil
 }
 
-func (displayNameDelegate) Render(w io.Writer, _ list.Model, _ int, item list.Item) {
+func (displayNameDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
 	style := listItemStyle
-	if stale, ok := item.(staleListItem); ok && stale.kind == core.FolderItem {
-		style = folderListItemStyle
+	marker := "[x] "
+	if stale, ok := item.(staleListItem); ok {
+		if !stale.selected {
+			style = unselectedListItemStyle
+			marker = "[ ] "
+		} else if stale.stale.Kind == core.FolderItem {
+			style = folderListItemStyle
+		}
 	}
-	_, _ = fmt.Fprint(w, style.Render(listItemIndent+item.FilterValue()))
+	if index == m.Index() {
+		style = currentListItemStyle
+	}
+	_, _ = fmt.Fprint(w, style.Render(listItemIndent+marker+item.FilterValue()))
 }

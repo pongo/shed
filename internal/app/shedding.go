@@ -32,8 +32,8 @@ func runSheddingPhase(ctx context.Context, opts Options, invocationFolder, selec
 	}
 	sheddingResult, runErr := opts.Shedding.RunShedding(ctx, SheddingRequest{
 		Confirmation: confirmation,
-		Move: func(ctx context.Context) (core.MoveSummary, error) {
-			return opts.Mover.Move(ctx, selectedFolder, plannedBucket, result)
+		Move: func(ctx context.Context, scan core.ScanResult) (core.MoveSummary, error) {
+			return opts.Mover.Move(ctx, selectedFolder, plannedBucket, scan)
 		},
 		View: MoveViewData{
 			SkippedItems: result.SkippedItems,

@@ -13,6 +13,7 @@ import (
 type movingModel struct {
 	ctx     context.Context
 	move    app.MoveFunc
+	scan    core.ScanResult
 	view    app.MoveViewData
 	spinner spinner.Model
 	summary core.MoveSummary
@@ -39,7 +40,7 @@ func (m movingModel) Init() tea.Cmd {
 }
 
 func (m movingModel) runMove() tea.Msg {
-	summary, err := m.move(m.ctx)
+	summary, err := m.move(m.ctx, m.scan)
 	return moveFinishedMsg{summary: summary, err: err}
 }
 
